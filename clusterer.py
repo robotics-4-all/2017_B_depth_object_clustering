@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 from __future__ import division
+import time
 from PIL import Image
 import sys
 import math
@@ -9,18 +10,19 @@ import cv2
 from sklearn.cluster import KMeans
 
 # Load a color image
-imgrgb = cv2.imread('5rgb.png')
-imgdepth = cv2.imread('5d.png',cv2.IMREAD_GRAYSCALE)
+imgrgb = cv2.imread('Database/5rgb.png')
+# Load a depth image (aligned and grayscale)
+imgdepth = cv2.imread('Database/5d.png',cv2.IMREAD_GRAYSCALE)
 # Convert the image to Lab color space 
 imglab = cv2.cvtColor(imgrgb, cv2.COLOR_RGB2Lab)
+
+#~ imgdepth = (imgdepth/(imgdepth.max()- imgdepth.min()) * 254).astype(int)
 
 L = imglab[:,:,0]
 a = imglab[:,:,1]
 b = imglab[:,:,2]
-#~ cv2.imshow('a',a)
-#~ cv2.imshow('b',b)
-#~ cv2.imshow('L',L)
 
+# Scaling
 sigma_L = np.std(L)
 sigma_a = np.std(a)
 sigma_b = np.std(b)
@@ -35,13 +37,13 @@ sigma_x = np.std(np.std(imgcoord[:,:,0])) + 0.0000000001 # avoid zeros
 sigma_y = np.std(np.std(imgcoord[:,:,1])) + 0.0000000001 # avoid zeros
 sigma_z = np.std(np.std(imgcoord[:,:,2])) + 0.0000000001 # avoid zeros
 imgcoord = (3/(sigma_x + sigma_y + sigma_z)) * imgcoord
-#~ coord_weight = 0.00000000000005
-coord_weight = 0.00000000001
+depth_weight = 0.00000000001
+coord_weight = 0.00000000000001
 
 feature_vector = np.zeros((480,640,6))
 feature_vector[:,:,0:3] = imglab
-#~ feature_vector[:,:,3:6] = imgcoord * coord_weight # x+y+z
-feature_vector[:,:,5] = imgcoord[:,:,2] * coord_weight # only z
+feature_vector[:,:,3:5] = imgcoord[:,:,0:1] * coord_weight # x+y
+feature_vector[:,:,5] = imgcoord[:,:,2] * depth_weight # z
 
 # Visualize Data with Scatterplot Matrix
 #~ import matplotlib.pyplot as plt
@@ -50,10 +52,12 @@ feature_vector[:,:,5] = imgcoord[:,:,2] * coord_weight # only z
 #~ scatter_matrix(feature_vector)
 #~ plt.show()
 
-nclusters = 7
+nclusters = 9
 feature_vectorarray = feature_vector.reshape(480*640,6)
+start_time = time.time()
 kmeans = KMeans(n_clusters=nclusters,n_jobs=-1).fit(feature_vectorarray[:,1:]) # use only a and b
-print "Kmeans is done!"
+elapsed_time = time.time() - start_time
+print "Kmeans with", nclusters, "clusters is done with", elapsed_time, "s elapsed time!"
 segmimg = np.zeros((480,640,3),dtype=np.uint8)
 
 coldict = {
@@ -81,17 +85,24 @@ coldict = {
 '[21]': [0, 0, 0]
 }
 
+# TODO parallelize it
 for i in range(0, 480):
   sys.stdout.write("Progress: %.2f%%   \r" % ((i/480)*100) )
   sys.stdout.flush()
   for j in range(0, 640):
-    if imgdepth[i,j] < imgdepth.max() - 3: # apply a depth threshold
-      segmimg[i,j,:] = coldict[str(kmeans.predict([feature_vector[i,j,1:]]))]
-    else:
-      segmimg[i,j,:] = 0
+    #~ if imgdepth[i,j] < imgdepth.max() - 3: # apply a depth threshold
+      #~ segmimg[i,j,:] = coldict[str(kmeans.predict([feature_vector[i,j,1:]]))]
+    #~ else:
+      #~ segmimg[i,j,:] = 0
+    segmimg[i,j,:] = coldict[str(kmeans.predict([feature_vector[i,j,1:]]))]
 
-vis = np.concatenate((imgrgb, segmimg), axis=1)
-cv2.imshow('kmeans',vis)
+
+vis = np.concatenate((imgrgb, cv2.cvtColor(imgdepth,cv2.COLOR_GRAY2RGB), segmimg), axis=1)
+name = "result_" + str(nclusters) + ".png"
+nameall = "resultall_" + str(nclusters) + ".png"
+cv2.imshow('result',vis)
+cv2.imwrite(name,segmimg)
+cv2.imwrite(nameall,vis)
 
 cv2.waitKey(0)
 raw_input("Press Esc and Enter to end...")
