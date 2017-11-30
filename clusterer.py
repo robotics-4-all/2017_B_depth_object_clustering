@@ -10,9 +10,15 @@ import cv2
 from sklearn.cluster import KMeans
 
 # Load a color image
-imgrgb = cv2.imread('Database/5rgb.png')
+init_imgrgb = cv2.imread('Database/kinect1rgb.png')
 # Load a depth image (aligned and grayscale)
-imgdepth = cv2.imread('Database/5d.png',cv2.IMREAD_GRAYSCALE)
+init_imgdepth = cv2.imread('Database/kinect1d.png',cv2.IMREAD_GRAYSCALE)
+
+# Crop the images for the missing information due to alignment
+imgrgb = init_imgrgb[12:242, 13:314]
+imgdepth = init_imgdepth[12:242, 13:314]
+height, width, channels = imgrgb.shape
+
 # Convert the image to Lab color space 
 imglab = cv2.cvtColor(imgrgb, cv2.COLOR_RGB2Lab)
 
@@ -28,19 +34,20 @@ sigma_a = np.std(a)
 sigma_b = np.std(b)
 imglab = (3/(sigma_L+sigma_a+sigma_b)) * imglab
 
-imgcoord = np.zeros((480,640,3))
-imgcoord[:,:,0] = np.transpose(np.tile(np.array(range(480)),(640,1))) + 1
-imgcoord[:,:,1] = np.tile(np.array(range(640)),(480,1)) + 1
+imgcoord = np.zeros((height,width,3))
+imgcoord[:,:,0] = np.transpose(np.tile(np.array(range(height)),(width,1))) + 1
+imgcoord[:,:,1] = np.tile(np.array(range(width)),(height,1)) + 1
 imgcoord[:,:,2] = imgdepth[:,:]
 
 sigma_x = np.std(np.std(imgcoord[:,:,0])) + 0.0000000001 # avoid zeros
 sigma_y = np.std(np.std(imgcoord[:,:,1])) + 0.0000000001 # avoid zeros
 sigma_z = np.std(np.std(imgcoord[:,:,2])) + 0.0000000001 # avoid zeros
 imgcoord = (3/(sigma_x + sigma_y + sigma_z)) * imgcoord
-depth_weight = 0.00000000001
-coord_weight = 0.00000000000001
+depth_weight = 0.0000001
+#~ coord_weight = 0.00000000000001
+coord_weight = 0
 
-feature_vector = np.zeros((480,640,6))
+feature_vector = np.zeros((height,width,6))
 feature_vector[:,:,0:3] = imglab
 feature_vector[:,:,3:5] = imgcoord[:,:,0:1] * coord_weight # x+y
 feature_vector[:,:,5] = imgcoord[:,:,2] * depth_weight # z
@@ -52,13 +59,13 @@ feature_vector[:,:,5] = imgcoord[:,:,2] * depth_weight # z
 #~ scatter_matrix(feature_vector)
 #~ plt.show()
 
-nclusters = 9
-feature_vectorarray = feature_vector.reshape(480*640,6)
+nclusters = 5
+feature_vectorarray = feature_vector.reshape(height*width,6)
 start_time = time.time()
 kmeans = KMeans(n_clusters=nclusters,n_jobs=-1).fit(feature_vectorarray[:,1:]) # use only a and b
 elapsed_time = time.time() - start_time
 print "Kmeans with", nclusters, "clusters is done with", elapsed_time, "s elapsed time!"
-segmimg = np.zeros((480,640,3),dtype=np.uint8)
+segmimg = np.zeros((height,width,3),dtype=np.uint8)
 
 coldict = {
 '[0]': [230, 25, 75],
@@ -86,10 +93,10 @@ coldict = {
 }
 
 # TODO parallelize it
-for i in range(0, 480):
-  sys.stdout.write("Progress: %.2f%%   \r" % ((i/480)*100) )
+for i in range(0, height):
+  sys.stdout.write("Progress: %.2f%%   \r" % ((i/height)*100) )
   sys.stdout.flush()
-  for j in range(0, 640):
+  for j in range(0, width):
     #~ if imgdepth[i,j] < imgdepth.max() - 3: # apply a depth threshold
       #~ segmimg[i,j,:] = coldict[str(kmeans.predict([feature_vector[i,j,1:]]))]
     #~ else:
