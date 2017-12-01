@@ -7,22 +7,32 @@ import sys
 import math
 import numpy as np
 import cv2
+import yaml
 from sklearn.cluster import KMeans
 
-# Load a color image
-init_imgrgb = cv2.imread('Database/kinect1rgb.png')
-# Load a depth image (aligned and grayscale)
-init_imgdepth = cv2.imread('Database/kinect1d.png',cv2.IMREAD_GRAYSCALE)
+# Read the parameters from the yaml file
+with open("conf.yaml", 'r') as stream:
+  try:
+    doc = yaml.load(stream)
+  except yaml.YAMLError as exc:
+    print(exc)
 
-# Crop the images for the missing information due to alignment
-imgrgb = init_imgrgb[12:242, 13:314]
-imgdepth = init_imgdepth[12:242, 13:314]
+nclusters = doc["clustering"]["number_of_clusters"] # maybe find it from histogram of RGB
+depth_weight = doc["clustering"]["depth_weight"]
+coord_weight = doc["clustering"]["coordinates_weight"]
+
+# Load a color image
+imgrgb = cv2.imread('Database/kinect3rgb.png')
+# Load a depth image (aligned and grayscale)
+imgdepth = cv2.imread('Database/kinect3d.png',cv2.IMREAD_GRAYSCALE)
+
+# Crop the images to discard the missing information due to alignment
+#~ imgrgb = init_imgrgb[12:242, 13:314]
+#~ imgdepth = init_imgdepth[12:242, 13:314]
 height, width, channels = imgrgb.shape
 
 # Convert the image to Lab color space 
 imglab = cv2.cvtColor(imgrgb, cv2.COLOR_RGB2Lab)
-
-#~ imgdepth = (imgdepth/(imgdepth.max()- imgdepth.min()) * 254).astype(int)
 
 L = imglab[:,:,0]
 a = imglab[:,:,1]
@@ -42,29 +52,20 @@ imgcoord[:,:,2] = imgdepth[:,:]
 sigma_x = np.std(np.std(imgcoord[:,:,0])) + 0.0000000001 # avoid zeros
 sigma_y = np.std(np.std(imgcoord[:,:,1])) + 0.0000000001 # avoid zeros
 sigma_z = np.std(np.std(imgcoord[:,:,2])) + 0.0000000001 # avoid zeros
-imgcoord = (3/(sigma_x + sigma_y + sigma_z)) * imgcoord
-depth_weight = 0.0000001
-#~ coord_weight = 0.00000000000001
-coord_weight = 0
+
+imgcoord[:,:,0:2] = (2/(sigma_x + sigma_y)) * imgcoord[:,:,0:2]
+imgcoord[:,:,2] = (1/(sigma_z)) * imgcoord[:,:,2]
 
 feature_vector = np.zeros((height,width,6))
 feature_vector[:,:,0:3] = imglab
 feature_vector[:,:,3:5] = imgcoord[:,:,0:1] * coord_weight # x+y
 feature_vector[:,:,5] = imgcoord[:,:,2] * depth_weight # z
 
-# Visualize Data with Scatterplot Matrix
-#~ import matplotlib.pyplot as plt
-#~ import pandas
-#~ from pandas.tools.plotting import scatter_matrix
-#~ scatter_matrix(feature_vector)
-#~ plt.show()
-
-nclusters = 5
-feature_vectorarray = feature_vector.reshape(height*width,6)
+feature_vectorarray = feature_vector.reshape(height*width,6) # TODO remove zeros from Depth
 start_time = time.time()
 kmeans = KMeans(n_clusters=nclusters,n_jobs=-1).fit(feature_vectorarray[:,1:]) # use only a and b
 elapsed_time = time.time() - start_time
-print "Kmeans with", nclusters, "clusters is done with", elapsed_time, "s elapsed time!"
+print "Kmeans with", nclusters, "clusters is done with elapsed time", elapsed_time, "s!"
 segmimg = np.zeros((height,width,3),dtype=np.uint8)
 
 coldict = {
@@ -97,18 +98,18 @@ for i in range(0, height):
   sys.stdout.write("Progress: %.2f%%   \r" % ((i/height)*100) )
   sys.stdout.flush()
   for j in range(0, width):
-    #~ if imgdepth[i,j] < imgdepth.max() - 3: # apply a depth threshold
-      #~ segmimg[i,j,:] = coldict[str(kmeans.predict([feature_vector[i,j,1:]]))]
-    #~ else:
-      #~ segmimg[i,j,:] = 0
-    segmimg[i,j,:] = coldict[str(kmeans.predict([feature_vector[i,j,1:]]))]
-
+    if imgdepth[i,j] > 0 and imgdepth[i,j] < 200: # apply a depth threshold
+      segmimg[i,j,:] = coldict[str(kmeans.predict([feature_vector[i,j,1:]]))]
+    else:
+      segmimg[i,j,:] = 0
+    #~ segmimg[i,j,:] = coldict[str(kmeans.predict([feature_vector[i,j,1:]]))]
 
 vis = np.concatenate((imgrgb, cv2.cvtColor(imgdepth,cv2.COLOR_GRAY2RGB), segmimg), axis=1)
 name = "result_" + str(nclusters) + ".png"
 nameall = "resultall_" + str(nclusters) + ".png"
 cv2.imshow('result',vis)
 cv2.imwrite(name,segmimg)
+cv2.imwrite('result_cur.png',segmimg)
 cv2.imwrite(nameall,vis)
 
 cv2.waitKey(0)

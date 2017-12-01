@@ -1,0 +1,5 @@
+clustering:
+  depth_weight        : 0.000000000002
+  coordinates_weight  : 0
+  number_of_clusters  : 13
+
