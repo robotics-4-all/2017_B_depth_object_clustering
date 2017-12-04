@@ -1,3 +1,7 @@
+images:
+  rgbname             : 'Database/kinect3rgb.png'
+  depthname           : 'Database/kinect3d.png'
+
 clustering:
   depth_weight        : 0.000000000002
   coordinates_weight  : 0

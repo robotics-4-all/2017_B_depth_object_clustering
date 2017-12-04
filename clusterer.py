@@ -9,6 +9,7 @@ import numpy as np
 import cv2
 import yaml
 from sklearn.cluster import KMeans
+from matplotlib import pyplot as plt
 
 # Read the parameters from the yaml file
 with open("conf.yaml", 'r') as stream:
@@ -17,14 +18,22 @@ with open("conf.yaml", 'r') as stream:
   except yaml.YAMLError as exc:
     print(exc)
 
+rgbname = doc["images"]["rgbname"]
+depthname = doc["images"]["depthname"]
 nclusters = doc["clustering"]["number_of_clusters"] # maybe find it from histogram of RGB
 depth_weight = doc["clustering"]["depth_weight"]
 coord_weight = doc["clustering"]["coordinates_weight"]
 
-# Load a color image
-imgrgb = cv2.imread('Database/kinect3rgb.png')
-# Load a depth image (aligned and grayscale)
-imgdepth = cv2.imread('Database/kinect3d.png',cv2.IMREAD_GRAYSCALE)
+# Load the color image
+imgrgb = cv2.imread(rgbname)
+# Load the depth image (aligned and grayscaled)
+imgdepth = cv2.imread(depthname,cv2.IMREAD_GRAYSCALE)
+# TODO divide it into sections with adaptive thresholding
+#~ hist = cv2.calcHist([imgdepth],[0],None,[256],[0,256])
+#~ plt.plot(hist[1:]) # ignore zeros
+#~ plt.xlim([1,256])
+#~ plt.show()
+
 
 # Crop the images to discard the missing information due to alignment
 #~ imgrgb = init_imgrgb[12:242, 13:314]
@@ -98,20 +107,21 @@ for i in range(0, height):
   sys.stdout.write("Progress: %.2f%%   \r" % ((i/height)*100) )
   sys.stdout.flush()
   for j in range(0, width):
-    if imgdepth[i,j] > 0 and imgdepth[i,j] < 200: # apply a depth threshold
+    if imgdepth[i,j] > 0 and imgdepth[i,j] < 110: # apply a depth threshold
       segmimg[i,j,:] = coldict[str(kmeans.predict([feature_vector[i,j,1:]]))]
     else:
       segmimg[i,j,:] = 0
-    #~ segmimg[i,j,:] = coldict[str(kmeans.predict([feature_vector[i,j,1:]]))]
 
 vis = np.concatenate((imgrgb, cv2.cvtColor(imgdepth,cv2.COLOR_GRAY2RGB), segmimg), axis=1)
-name = "result_" + str(nclusters) + ".png"
-nameall = "resultall_" + str(nclusters) + ".png"
+name = "Results/result_" + str(nclusters) + ".png"
+nameall = "Results/resultall_" + str(nclusters) + ".png"
 cv2.imshow('result',vis)
 cv2.imwrite(name,segmimg)
-cv2.imwrite('result_cur.png',segmimg)
+cv2.imwrite('Results/result_cur.png',segmimg)
 cv2.imwrite(nameall,vis)
 
 cv2.waitKey(0)
 raw_input("Press Esc and Enter to end...")
 cv2.destroyAllWindows()
+
+#~ merger(img,mask)
