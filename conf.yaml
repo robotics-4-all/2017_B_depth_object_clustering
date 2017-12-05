@@ -1,0 +1,12 @@
+images:
+  rgbname             : 'Database/kinect3rgb.png'
+  depthname           : 'Database/kinect3d.png'
+  clusteredname       : 'Results/result_cur.png'
+
+clustering:
+  depth_weight        : 0.000000000002
+  coordinates_weight  : 0
+  number_of_clusters  : 13
+  depth_thresup       : 110
+  depth_thresdown     : 0
+
