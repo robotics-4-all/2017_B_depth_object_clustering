@@ -3,7 +3,6 @@
 
 from __future__ import division
 import time
-from PIL import Image
 import sys
 import math
 import numpy as np
@@ -56,7 +55,12 @@ def clusterer(rgbname,depthname,nclusters,depth_weight,coord_weight,depth_thresu
   feature_vector[:,:,3:5] = imgcoord[:,:,0:1] * coord_weight # x+y
   feature_vector[:,:,5] = imgcoord[:,:,2] * depth_weight # z
 
-  feature_vectorarray = feature_vector.reshape(height*width,6) # TODO remove zeros from Depth
+  feature_vectorarray = feature_vector.reshape(height*width,6)
+  conditionup = feature_vectorarray[:,-1] < depth_thresup * (depth_weight/(sigma_z))
+  conditiondown = feature_vectorarray[:,-1] > depth_thresdown * (depth_weight/(sigma_z))
+  condition = np.logical_and(conditionup, conditiondown)
+  feature_vectorarray = feature_vectorarray[np.where(condition)]
+  print "\n", feature_vectorarray.shape, "\n"
   start_time = time.time()
   kmeans = KMeans(n_clusters=nclusters,n_jobs=-1).fit(feature_vectorarray[:,1:]) # use only a and b
   elapsed_time = time.time() - start_time
@@ -121,9 +125,9 @@ if __name__ == '__main__':
     
   rgbname = doc["images"]["rgbname"]
   depthname = doc["images"]["depthname"]
-  nclusters = doc["clustering"]["number_of_clusters"] # maybe find it from histogram of RGB
+  nclusters = doc["clustering"]["number_of_clusters"] # TODO maybe find it from histogram of RGB
   depth_weight = doc["clustering"]["depth_weight"]
   coord_weight = doc["clustering"]["coordinates_weight"]
-  depth_thresup = doc["clustering"]["depth_thresup"]  # maybe find it from histogram of Depth
+  depth_thresup = doc["clustering"]["depth_thresup"]  # TODO maybe find it from histogram of Depth
   depth_thresdown = doc["clustering"]["depth_thresdown"]
   clusterer(rgbname,depthname,nclusters,depth_weight,coord_weight,depth_thresup,depth_thresdown)
