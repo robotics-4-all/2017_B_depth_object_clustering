@@ -18,7 +18,7 @@ rgbname = doc["images"]["rgbname"]
 depthname = doc["images"]["depthname"]
 clusteredname = doc["images"]["clusteredname"]
 
-# Create a window with RGB and Depth images
+# Create a window with initial RGB and Depth images
 rgbimg = cv2.imread(rgbname)
 depthimg = cv2.imread(depthname)
 img = np.concatenate((rgbimg, depthimg), axis=1)
@@ -50,21 +50,22 @@ while(1):
   k = cv2.waitKey(1) & 0xFF
   if k == 27:
     break
-
-  # Get current positions of trackbars
-  nclusters = cv2.getTrackbarPos('Clusters','image')
-  depth_weightn = cv2.getTrackbarPos('Depth Weight1','image')
-  depth_weightp = cv2.getTrackbarPos('Depth Weight2','image')
-  depth_weight = depth_weightn ** (-depth_weightp)
-  coord_weight = cv2.getTrackbarPos('Coord Weight','image')
-  depth_thresup = cv2.getTrackbarPos('Depth ThresUp','image')
-  depth_thresdown = cv2.getTrackbarPos('Depth ThresDown','image')
+  
   s = cv2.getTrackbarPos(switch,'image')
 
   if s == 1:
+    # Get current positions of trackbars
+    nclusters = cv2.getTrackbarPos('Clusters','image')
+    depth_weightn = cv2.getTrackbarPos('Depth Weight1','image')
+    depth_weightp = cv2.getTrackbarPos('Depth Weight2','image')
+    depth_weight = depth_weightn ** (-depth_weightp)
+    coord_weight = cv2.getTrackbarPos('Coord Weight','image')
+    depth_thresup = cv2.getTrackbarPos('Depth ThresUp','image')
+    depth_thresdown = cv2.getTrackbarPos('Depth ThresDown','image')
+    
+    # Apply the proccesing functions
     img = clusterer.clusterer(rgbname,depthname,nclusters,depth_weight,coord_weight,depth_thresup,depth_thresdown)
     img = metaproccessor.metaproccessor(clusteredname,rgbname,depthname,nclusters)
     cv2.setTrackbarPos(switch,'image', 0)
-  #~ else:
 
 cv2.destroyAllWindows()

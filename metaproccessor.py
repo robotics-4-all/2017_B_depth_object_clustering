@@ -33,9 +33,10 @@ def metaproccessor(clusteredname,rgbname,depthname,nclusters):
   '[21]': [0, 0, 0]
   }
 
-  imgproc = img
+  imgproc = rgbimg.copy()
   height, width, channels = img.shape
   overall_mask = np.zeros((height,width), np.uint8) # blank mask
+  object_counter = 0
 
   for i in range(0, nclusters):
     string_index = '['+str(i)+']'
@@ -52,14 +53,24 @@ def metaproccessor(clusteredname,rgbname,depthname,nclusters):
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernelclosing)
     mask = cv2.morphologyEx(mask, cv2.MORPH_GRADIENT, kernelgrad)
     mask = cv2.erode(mask,kernelero,iterations = 1)
+    mask = cv2.erode(mask,np.ones((2,2),np.uint8),iterations = 1)
+    
+    
+    image, contours, hier = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    for c in contours[0:len(contours):2]: # TODO fix this, every contour is double
+      object_counter += 1
+      # Get the bounding rect
+      x, y, w, h = cv2.boundingRect(c)
+      # Draw rectangle to visualize the bounding rect with label-color
+      cv2.rectangle(imgproc, (x, y), (x+w, y+h), coldict[string_index], 1)
+      cv2.putText(imgproc, str(object_counter), (x,y-1), cv2.FONT_HERSHEY_SIMPLEX, 0.5, coldict[string_index],1)
+      
     overall_mask = np.bitwise_or(mask, overall_mask)
-
-  imgproc = cv2.bitwise_and(rgbimg, rgbimg, mask = cv2.bitwise_not(overall_mask))
-
-  vis1 = np.concatenate((rgbimg, cv2.cvtColor(imgdepth,cv2.COLOR_GRAY2RGB)), axis=1)
-  vis2 = np.concatenate((img, imgproc), axis=1)
+  print "Number of objects detected:", object_counter
+  img_mask = cv2.bitwise_and(rgbimg, rgbimg, mask = cv2.bitwise_not(overall_mask))
+  vis1 = np.concatenate((rgbimg, cv2.cvtColor(imgdepth,cv2.COLOR_GRAY2RGB), img), axis=1)
+  vis2 = np.concatenate((cv2.cvtColor(overall_mask,cv2.COLOR_GRAY2RGB),img_mask,imgproc), axis=1)
   finalvis = np.concatenate((vis1, vis2), axis=0)
-  #~ cv2.imshow("Image after processing", finalvis)
   return finalvis
   
 if __name__ == '__main__':
@@ -72,4 +83,7 @@ if __name__ == '__main__':
   rgbname = doc["images"]["rgbname"]
   depthname = doc["images"]["depthname"]
   clusteredname = doc["images"]["clusteredname"]
-  metaproccessor(clusteredname,rgbname,depthname,nclusters)
+  vis = metaproccessor(clusteredname,rgbname,depthname,nclusters)
+  cv2.imshow("Image after processing", vis)
+  cv2.waitKey(0)
+  cv2.destroyAllWindows()

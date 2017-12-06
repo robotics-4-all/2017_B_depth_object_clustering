@@ -24,10 +24,6 @@ def clusterer(rgbname,depthname,nclusters,depth_weight,coord_weight,depth_thresu
   #~ plt.xlim([1,256])
   #~ plt.show()
 
-
-  # Crop the images to discard the missing information due to alignment
-  #~ imgrgb = init_imgrgb[12:242, 13:314]
-  #~ imgdepth = init_imgdepth[12:242, 13:314]
   height, width, channels = imgrgb.shape
 
   # Convert the image to Lab color space 
