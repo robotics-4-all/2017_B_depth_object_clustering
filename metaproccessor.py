@@ -9,28 +9,28 @@ def metaproccessor(clusteredname,rgbname,depthname,nclusters):
   imgdepth = cv2.imread(depthname,cv2.IMREAD_GRAYSCALE)
 
   coldict = {
-  '[0]': [230, 25, 75],
-  '[1]': [60, 180, 75],
-  '[2]': [255, 225, 25],
-  '[3]': [0, 130, 200],
-  '[4]': [245, 130, 48],
-  '[5]': [145, 30, 180],
-  '[6]': [70, 240, 240],
-  '[7]': [240, 50, 230],
-  '[8]': [210, 245, 60],
-  '[9]': [250, 190, 190],
-  '[10]': [0, 128, 128],
-  '[11]': [230, 190, 255],
-  '[12]': [170, 110, 40],
-  '[13]': [255, 250, 200],
-  '[14]': [128, 0, 0],
-  '[15]': [170, 255, 195],
-  '[16]': [128, 128, 0],
-  '[17]': [255, 215, 180],
-  '[18]': [0, 0, 128],
-  '[19]': [128, 128, 128],
-  '[20]': [255, 255, 255],
-  '[21]': [0, 0, 0]
+    0: [230, 25, 75],
+    1: [60, 180, 75],
+    2: [255, 225, 25],
+    3: [0, 130, 200],
+    4: [245, 130, 48],
+    5: [145, 30, 180],
+    6: [70, 240, 240],
+    7: [240, 50, 230],
+    8: [210, 245, 60],
+    9: [250, 190, 190],
+    10: [0, 128, 128],
+    11: [230, 190, 255],
+    12: [170, 110, 40],
+    13: [255, 250, 200],
+    14: [128, 0, 0],
+    15: [170, 255, 195],
+    16: [128, 128, 0],
+    17: [255, 215, 180],
+    18: [0, 0, 128],
+    19: [128, 128, 128],
+    20: [255, 255, 255],
+    21: [0, 0, 0]
   }
 
   imgproc = rgbimg.copy()
@@ -39,8 +39,7 @@ def metaproccessor(clusteredname,rgbname,depthname,nclusters):
   object_counter = 0
 
   for i in range(0, nclusters):
-    string_index = '['+str(i)+']'
-    desiredcolor = coldict[string_index]  
+    desiredcolor = coldict[i]  
 
     desiredcolorarray = np.array(desiredcolor, dtype = "uint8")
     maskinit = cv2.inRange(img, desiredcolorarray, desiredcolorarray)
@@ -62,8 +61,8 @@ def metaproccessor(clusteredname,rgbname,depthname,nclusters):
       # Get the bounding rect
       x, y, w, h = cv2.boundingRect(c)
       # Draw rectangle to visualize the bounding rect with label-color
-      cv2.rectangle(imgproc, (x, y), (x+w, y+h), coldict[string_index], 1)
-      cv2.putText(imgproc, str(object_counter), (x,y-1), cv2.FONT_HERSHEY_SIMPLEX, 0.5, coldict[string_index],1)
+      cv2.rectangle(imgproc, (x, y), (x+w, y+h), coldict[i], 1)
+      cv2.putText(imgproc, str(object_counter), (x,y-1), cv2.FONT_HERSHEY_SIMPLEX, 0.5, coldict[i],1)
       
     overall_mask = np.bitwise_or(mask, overall_mask)
   print "Number of objects detected:", object_counter

@@ -17,7 +17,7 @@ def clusterer(rgbname,depthname,nclusters,depth_weight,coord_weight,depth_thresu
   imgrgb = cv2.imread(rgbname)
   # Load the depth image (aligned and grayscaled)
   imgdepth = cv2.imread(depthname,cv2.IMREAD_GRAYSCALE)
-  # TODO divide it into sections with adaptive thresholding
+  # TODO divide image it into 2 or 3 sections with adaptive thresholding
   #~ hist = cv2.calcHist([imgdepth],[0],None,[256],[0,256])
   #~ plt.plot(hist[1:]) # ignore zeros
   #~ plt.xlim([1,256])
@@ -43,6 +43,8 @@ def clusterer(rgbname,depthname,nclusters,depth_weight,coord_weight,depth_thresu
   imgcoord[:,:,1] = np.tile(np.array(range(width)),(height,1)) + 1
   imgcoord[:,:,2] = imgdepth[:,:]
 
+
+  # TODO maybe they are useless - check it
   sigma_x = np.std(np.std(imgcoord[:,:,0])) + 0.0000000001 # avoid zeros
   sigma_y = np.std(np.std(imgcoord[:,:,1])) + 0.0000000001 # avoid zeros
   sigma_z = np.std(np.std(imgcoord[:,:,2])) + 0.0000000001 # avoid zeros
@@ -56,63 +58,63 @@ def clusterer(rgbname,depthname,nclusters,depth_weight,coord_weight,depth_thresu
   feature_vector[:,:,5] = imgcoord[:,:,2] * depth_weight # z
 
   feature_vectorarray = feature_vector.reshape(height*width,6)
+  
+  # Remove useless data based on the depth camera
   conditionup = feature_vectorarray[:,-1] < depth_thresup * (depth_weight/(sigma_z))
   conditiondown = feature_vectorarray[:,-1] > depth_thresdown * (depth_weight/(sigma_z))
   condition = np.logical_and(conditionup, conditiondown)
   feature_vectorarray = feature_vectorarray[np.where(condition)]
-  print "\n", feature_vectorarray.shape, "\n"
+  
   start_time = time.time()
+  # TODO check other methods of clustering
   kmeans = KMeans(n_clusters=nclusters,n_jobs=-1).fit(feature_vectorarray[:,1:]) # use only a and b
   elapsed_time = time.time() - start_time
-  print "Kmeans with", nclusters, "clusters is done with elapsed time", elapsed_time, "s!"
+  print "\nKmeans with", nclusters, "clusters is done with elapsed time", elapsed_time, "s!"
   segmimg = np.zeros((height,width,3),dtype=np.uint8)
 
   coldict = {
-  '[0]': [230, 25, 75],
-  '[1]': [60, 180, 75],
-  '[2]': [255, 225, 25],
-  '[3]': [0, 130, 200],
-  '[4]': [245, 130, 48],
-  '[5]': [145, 30, 180],
-  '[6]': [70, 240, 240],
-  '[7]': [240, 50, 230],
-  '[8]': [210, 245, 60],
-  '[9]': [250, 190, 190],
-  '[10]': [0, 128, 128],
-  '[11]': [230, 190, 255],
-  '[12]': [170, 110, 40],
-  '[13]': [255, 250, 200],
-  '[14]': [128, 0, 0],
-  '[15]': [170, 255, 195],
-  '[16]': [128, 128, 0],
-  '[17]': [255, 215, 180],
-  '[18]': [0, 0, 128],
-  '[19]': [128, 128, 128],
-  '[20]': [255, 255, 255],
-  '[21]': [0, 0, 0]
+    0: [230, 25, 75],
+    1: [60, 180, 75],
+    2: [255, 225, 25],
+    3: [0, 130, 200],
+    4: [245, 130, 48],
+    5: [145, 30, 180],
+    6: [70, 240, 240],
+    7: [240, 50, 230],
+    8: [210, 245, 60],
+    9: [250, 190, 190],
+    10: [0, 128, 128],
+    11: [230, 190, 255],
+    12: [170, 110, 40],
+    13: [255, 250, 200],
+    14: [128, 0, 0],
+    15: [170, 255, 195],
+    16: [128, 128, 0],
+    17: [255, 215, 180],
+    18: [0, 0, 128],
+    19: [128, 128, 128],
+    20: [255, 255, 255],
+    21: [0, 0, 0]
   }
 
-  # TODO parallelize it
+  nonzerosdepth_counter = 0
+  start_time = time.time()
   for i in range(0, height):
-    sys.stdout.write("Labelling with progress: %.2f%%   \r" % ((i/height)*100) )
-    sys.stdout.flush()
     for j in range(0, width):
       if imgdepth[i,j] > depth_thresdown and imgdepth[i,j] < depth_thresup: # apply a depth threshold
-        segmimg[i,j,:] = coldict[str(kmeans.predict([feature_vector[i,j,1:]]))]
+        segmimg[i,j,:] = coldict[kmeans.labels_[nonzerosdepth_counter]]
+        nonzerosdepth_counter += 1
       else:
         segmimg[i,j,:] = 0
-  print "\nLabelling is done!"
+  elapsed_time = time.time() - start_time
+  print "Labelling is done in time:", elapsed_time,"s!"
   vis = np.concatenate((imgrgb, cv2.cvtColor(imgdepth,cv2.COLOR_GRAY2RGB), segmimg), axis=1)
-  
   name = "Results/result_" + str(nclusters) + ".png"
   nameall = "Results/resultall_" + str(nclusters) + ".png"
-  #~ cv2.imshow('result',vis)
   cv2.imwrite(name,segmimg)
   cv2.imwrite('Results/result_cur.png',segmimg)
   cv2.imwrite(nameall,vis)
   return vis
-
-
 
 if __name__ == '__main__':
   
@@ -130,4 +132,7 @@ if __name__ == '__main__':
   coord_weight = doc["clustering"]["coordinates_weight"]
   depth_thresup = doc["clustering"]["depth_thresup"]  # TODO maybe find it from histogram of Depth
   depth_thresdown = doc["clustering"]["depth_thresdown"]
-  clusterer(rgbname,depthname,nclusters,depth_weight,coord_weight,depth_thresup,depth_thresdown)
+  vis = clusterer(rgbname,depthname,nclusters,depth_weight,coord_weight,depth_thresup,depth_thresdown)
+  cv2.imshow("Clustered Image", vis)
+  cv2.waitKey(0)
+  cv2.destroyAllWindows()
