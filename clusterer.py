@@ -49,8 +49,8 @@ def clusterer(rgbname,depthname,nclusters,depth_weight,coord_weight,depth_thresu
   sigma_y = np.std(np.std(imgcoord[:,:,1])) + 0.0000000001 # avoid zeros
   sigma_z = np.std(np.std(imgcoord[:,:,2])) + 0.0000000001 # avoid zeros
 
-  imgcoord[:,:,0:2] = (2/(sigma_x + sigma_y)) * imgcoord[:,:,0:2]
-  imgcoord[:,:,2] = (1/(sigma_z)) * imgcoord[:,:,2]
+  #~ imgcoord[:,:,0:2] = (2/(sigma_x + sigma_y)) * imgcoord[:,:,0:2]
+  #~ imgcoord[:,:,2] = (1/(sigma_z)) * imgcoord[:,:,2]
 
   feature_vector = np.zeros((height,width,6))
   feature_vector[:,:,0:3] = imglab
@@ -60,14 +60,18 @@ def clusterer(rgbname,depthname,nclusters,depth_weight,coord_weight,depth_thresu
   feature_vectorarray = feature_vector.reshape(height*width,6)
   
   # Remove useless data based on the depth camera
-  conditionup = feature_vectorarray[:,-1] < depth_thresup * (depth_weight/(sigma_z))
-  conditiondown = feature_vectorarray[:,-1] > depth_thresdown * (depth_weight/(sigma_z))
-  condition = np.logical_and(conditionup, conditiondown)
-  feature_vectorarray = feature_vectorarray[np.where(condition)]
+  if depth_weight != 0:
+    conditionup = feature_vectorarray[:,-1] < depth_thresup * depth_weight
+    conditiondown = feature_vectorarray[:,-1] > depth_thresdown * depth_weight
+    condition = np.logical_and(conditionup, conditiondown)
+    feature_vectorarray = feature_vectorarray[np.where(condition)]
   
   start_time = time.time()
   # TODO check other methods of clustering
-  kmeans = KMeans(n_clusters=nclusters,n_jobs=-1).fit(feature_vectorarray[:,1:]) # use only a and b
+  print feature_vectorarray[2,:]
+  print feature_vectorarray[542,:]
+  print feature_vectorarray[1002,:]
+  kmeans = KMeans(n_clusters=nclusters,n_jobs=-1).fit(feature_vectorarray[:,:]) # TODO use only a and b ?
   elapsed_time = time.time() - start_time
   print "\nKmeans with", nclusters, "clusters is done with elapsed time", elapsed_time, "s!"
   segmimg = np.zeros((height,width,3),dtype=np.uint8)
