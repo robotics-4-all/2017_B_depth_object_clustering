@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 import yaml
 
-def metaproccessor(clusteredname,rgbname,depthname,nclusters):
+def metaproccessor(clusteredname,rgbname,depthname,nclusters,minsize):
   img = cv2.imread(clusteredname)
   rgbimg = cv2.imread(rgbname)
   imgdepth = cv2.imread(depthname,cv2.IMREAD_GRAYSCALE)
@@ -57,12 +57,13 @@ def metaproccessor(clusteredname,rgbname,depthname,nclusters):
     
     image, contours, hier = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     for c in contours[0:len(contours):2]: # TODO fix this, every contour is double
-      object_counter += 1
-      # Get the bounding rect
-      x, y, w, h = cv2.boundingRect(c)
-      # Draw rectangle to visualize the bounding rect with label-color
-      cv2.rectangle(imgproc, (x, y), (x+w, y+h), coldict[i], 1)
-      cv2.putText(imgproc, str(object_counter), (x,y-1), cv2.FONT_HERSHEY_SIMPLEX, 0.5, coldict[i],1)
+      if cv2.contourArea(c) > minsize:
+        object_counter += 1
+        # Get the bounding rect
+        x, y, w, h = cv2.boundingRect(c)
+        # Draw rectangle to visualize the bounding rect with label-color
+        cv2.rectangle(imgproc, (x, y), (x+w, y+h), coldict[i], 1)
+        cv2.putText(imgproc, str(object_counter), (x,y-1), cv2.FONT_HERSHEY_SIMPLEX, 0.5, coldict[i],1)
       
     overall_mask = np.bitwise_or(mask, overall_mask)
   print "Number of objects detected:", object_counter
@@ -82,7 +83,7 @@ if __name__ == '__main__':
   rgbname = doc["images"]["rgbname"]
   depthname = doc["images"]["depthname"]
   clusteredname = doc["images"]["clusteredname"]
-  vis = metaproccessor(clusteredname,rgbname,depthname,nclusters)
+  vis = metaproccessor(clusteredname,rgbname,depthname,nclusters,10)
   cv2.imshow("Image after processing", vis)
   cv2.waitKey(0)
   cv2.destroyAllWindows()

@@ -37,8 +37,8 @@ cv2.createTrackbar('Depth ThresDown','image',0,255,nothing)
 
 # Set the default values fot the trackbars
 cv2.setTrackbarPos('Clusters','image', doc["clustering"]["number_of_clusters"])
-cv2.setTrackbarPos('Depth Weight1','image', 2)
-cv2.setTrackbarPos('Depth Weight2','image', 12)
+cv2.setTrackbarPos('Depth Weight1','image', 4)
+cv2.setTrackbarPos('Depth Weight2','image', 2)
 #~ cv2.setTrackbarPos('Coord Weight','image', doc["clustering"]["coordinates_weight"])
 cv2.setTrackbarPos('Depth ThresUp','image', doc["clustering"]["depth_thresup"])
 cv2.setTrackbarPos('Depth ThresDown','image', doc["clustering"]["depth_thresdown"])
@@ -55,7 +55,10 @@ while(1):
     nclusters = cv2.getTrackbarPos('Clusters','image')
     depth_weightn = cv2.getTrackbarPos('Depth Weight1','image')
     depth_weightp = cv2.getTrackbarPos('Depth Weight2','image')
-    depth_weight = depth_weightn ** (-depth_weightp)
+    if depth_weightn == 0:
+      depth_weight = 0
+    else:
+      depth_weight = depth_weightn ** (-depth_weightp)
     coord_weight = 0
     depth_thresup = cv2.getTrackbarPos('Depth ThresUp','image')
     depth_thresdown = cv2.getTrackbarPos('Depth ThresDown','image')
@@ -63,7 +66,7 @@ while(1):
     # Apply the proccesing functions
     start_time = time.time()
     img = clusterer.clusterer(rgbname,depthname,nclusters,depth_weight,coord_weight,depth_thresup,depth_thresdown)
-    img = metaproccessor.metaproccessor(clusteredname,rgbname,depthname,nclusters)
+    img = metaproccessor.metaproccessor(clusteredname,rgbname,depthname,nclusters,150)
     elapsed_time = time.time() - start_time
     print "Object detection is done in time:", elapsed_time,"s!"
     print "Press ENTER to start or Esc to exit."
