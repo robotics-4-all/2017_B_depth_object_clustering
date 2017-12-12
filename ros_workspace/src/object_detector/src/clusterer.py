@@ -9,7 +9,6 @@ import numpy as np
 import cv2
 import yaml
 from sklearn.cluster import KMeans
-from matplotlib import pyplot as plt
 
 def clusterer(imgrgb,imgdepth,nclusters,depth_weight,coord_weight,depth_thresup,depth_thresdown):
 
