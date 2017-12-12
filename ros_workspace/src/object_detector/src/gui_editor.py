@@ -10,7 +10,7 @@ def nothing(x):
     pass
 
 # Read the parameters from the yaml file
-with open("conf.yaml", 'r') as stream:
+with open("../cfg/conf.yaml", 'r') as stream:
   try:
     doc = yaml.load(stream)
   except yaml.YAMLError as exc:
@@ -22,8 +22,9 @@ clusteredname = doc["images"]["clusteredname"]
 
 # Create a window with initial RGB and Depth images
 rgbimg = cv2.imread(rgbname)
-depthimg = cv2.imread(depthname)
-img = np.concatenate((rgbimg, depthimg), axis=1)
+depthimgview = cv2.imread(depthname)
+depthimg = cv2.imread(depthname,cv2.IMREAD_GRAYSCALE)
+img = np.concatenate((rgbimg, depthimgview), axis=1)
 
 cv2.namedWindow('image')
 
@@ -65,8 +66,8 @@ while(1):
     
     # Apply the proccesing functions
     start_time = time.time()
-    img = clusterer.clusterer(rgbname,depthname,nclusters,depth_weight,coord_weight,depth_thresup,depth_thresdown)
-    img = metaproccessor.metaproccessor(clusteredname,rgbname,depthname,nclusters,150)
+    [clusteredimg,img] = clusterer.clusterer(rgbimg,depthimg,nclusters,depth_weight,coord_weight,depth_thresup,depth_thresdown)
+    img = metaproccessor.metaproccessor(clusteredimg,rgbimg,depthimg,nclusters,150)
     elapsed_time = time.time() - start_time
     print "Object detection is done in time:", elapsed_time,"s!"
     print "Press ENTER to start or Esc to exit."

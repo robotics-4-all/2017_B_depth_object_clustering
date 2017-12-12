@@ -11,12 +11,8 @@ import yaml
 from sklearn.cluster import KMeans
 from matplotlib import pyplot as plt
 
-def clusterer(rgbname,depthname,nclusters,depth_weight,coord_weight,depth_thresup,depth_thresdown):
+def clusterer(imgrgb,imgdepth,nclusters,depth_weight,coord_weight,depth_thresup,depth_thresdown):
 
-  # Load the color image
-  imgrgb = cv2.imread(rgbname)
-  # Load the depth image (aligned and grayscaled)
-  imgdepth = cv2.imread(depthname,cv2.IMREAD_GRAYSCALE)
   # TODO divide image it into 2 or 3 sections with adaptive thresholding
   #~ hist = cv2.calcHist([imgdepth],[0],None,[256],[0,256])
   #~ plt.plot(hist[1:]) # ignore zeros
@@ -68,38 +64,17 @@ def clusterer(rgbname,depthname,nclusters,depth_weight,coord_weight,depth_thresu
   
   start_time = time.time()
   # TODO check other methods of clustering
-  print feature_vectorarray[2,:]
-  print feature_vectorarray[542,:]
-  print feature_vectorarray[1002,:]
   kmeans = KMeans(n_clusters=nclusters,n_jobs=-1).fit(feature_vectorarray[:,:]) # TODO use only a and b ?
   elapsed_time = time.time() - start_time
   print "\nKmeans with", nclusters, "clusters is done with elapsed time", elapsed_time, "s!"
   segmimg = np.zeros((height,width,3),dtype=np.uint8)
 
-  coldict = {
-    0: [230, 25, 75],
-    1: [60, 180, 75],
-    2: [255, 225, 25],
-    3: [0, 130, 200],
-    4: [245, 130, 48],
-    5: [145, 30, 180],
-    6: [70, 240, 240],
-    7: [240, 50, 230],
-    8: [210, 245, 60],
-    9: [250, 190, 190],
-    10: [0, 128, 128],
-    11: [230, 190, 255],
-    12: [170, 110, 40],
-    13: [255, 250, 200],
-    14: [128, 0, 0],
-    15: [170, 255, 195],
-    16: [128, 128, 0],
-    17: [255, 215, 180],
-    18: [0, 0, 128],
-    19: [128, 128, 128],
-    20: [255, 255, 255],
-    21: [0, 0, 0]
-  }
+  with open("../cfg/conf.yaml", 'r') as stream:
+    try:
+      doc = yaml.load(stream)
+    except yaml.YAMLError as exc:
+      print(exc)
+  coldict = doc["clustering"]["coldict"]
 
   nonzerosdepth_counter = 0
   start_time = time.time()
@@ -118,12 +93,12 @@ def clusterer(rgbname,depthname,nclusters,depth_weight,coord_weight,depth_thresu
   cv2.imwrite(name,segmimg)
   cv2.imwrite('Results/result_cur.png',segmimg)
   cv2.imwrite(nameall,vis)
-  return vis
+  return [segmimg,vis]
 
 if __name__ == '__main__':
   
   # Read the parameters from the yaml file
-  with open("conf.yaml", 'r') as stream:
+  with open("../cfg/conf.yaml", 'r') as stream:
     try:
       doc = yaml.load(stream)
     except yaml.YAMLError as exc:
@@ -136,7 +111,12 @@ if __name__ == '__main__':
   coord_weight = doc["clustering"]["coordinates_weight"]
   depth_thresup = doc["clustering"]["depth_thresup"]  # TODO maybe find it from histogram of Depth
   depth_thresdown = doc["clustering"]["depth_thresdown"]
-  vis = clusterer(rgbname,depthname,nclusters,depth_weight,coord_weight,depth_thresup,depth_thresdown)
+  # Load the color image
+  imgrgb = cv2.imread(rgbname)
+  # Load the depth image (aligned and grayscaled)
+  imgdepth = cv2.imread(depthname,cv2.IMREAD_GRAYSCALE)
+  
+  [clustered,vis] = clusterer(imgrgb,imgdepth,nclusters,depth_weight,coord_weight,depth_thresup,depth_thresdown)
   cv2.imshow("Clustered Image", vis)
   cv2.waitKey(0)
   cv2.destroyAllWindows()
