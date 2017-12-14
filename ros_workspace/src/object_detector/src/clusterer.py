@@ -9,15 +9,17 @@ import numpy as np
 import cv2
 import yaml
 from sklearn.cluster import KMeans
+from matplotlib import pyplot as plt
+
 
 def clusterer(imgrgb,imgdepth,nclusters,depth_weight,coord_weight,depth_thresup,depth_thresdown):
 
   # TODO divide image it into 2 or 3 sections with adaptive thresholding
-  #~ hist = cv2.calcHist([imgdepth],[0],None,[256],[0,256])
-  #~ plt.plot(hist[1:]) # ignore zeros
-  #~ plt.xlim([1,256])
+  # Maybe 40 threshold is fine
+  #~ hist = cv2.calcHist([imgdepth],[0],None,[255],[1,256])
+  #~ plt.hist(imgdepth.ravel(),255,[1,256]);
   #~ plt.show()
-
+  
   height, width, channels = imgrgb.shape
 
   # Convert the image to Lab color space 
@@ -26,7 +28,8 @@ def clusterer(imgrgb,imgdepth,nclusters,depth_weight,coord_weight,depth_thresup,
   L = imglab[:,:,0]
   a = imglab[:,:,1]
   b = imglab[:,:,2]
-
+  
+  # TODO check it, maybe it's useless
   # Scaling
   sigma_L = np.std(L)
   sigma_a = np.std(a)
@@ -63,7 +66,7 @@ def clusterer(imgrgb,imgdepth,nclusters,depth_weight,coord_weight,depth_thresup,
   
   start_time = time.time()
   # TODO check other methods of clustering
-  kmeans = KMeans(n_clusters=nclusters,n_jobs=-1).fit(feature_vectorarray[:,:]) # TODO use only a and b ?
+  kmeans = KMeans(n_clusters=nclusters,n_jobs=-1).fit(feature_vectorarray[:,[1,2,5]]) # TODO use only a and b ?
   elapsed_time = time.time() - start_time
   print "\nKmeans with", nclusters, "clusters is done with elapsed time", elapsed_time, "s!"
   segmimg = np.zeros((height,width,3),dtype=np.uint8)
@@ -79,7 +82,7 @@ def clusterer(imgrgb,imgdepth,nclusters,depth_weight,coord_weight,depth_thresup,
   start_time = time.time()
   for i in range(0, height):
     for j in range(0, width):
-      if imgdepth[i,j] > depth_thresdown and imgdepth[i,j] < depth_thresup: # apply a depth threshold
+      if imgdepth[i,j] > depth_thresdown and imgdepth[i,j] < depth_thresup:
         segmimg[i,j,:] = coldict[kmeans.labels_[nonzerosdepth_counter]]
         nonzerosdepth_counter += 1
       else:

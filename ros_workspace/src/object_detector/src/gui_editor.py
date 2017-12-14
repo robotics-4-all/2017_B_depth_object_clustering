@@ -51,6 +51,12 @@ while(1):
   if k == 27:
     break
     
+  if k == 114: # if you press r, take a new image
+    rgbimg = cv2.imread(rgbname)
+    depthimgview = cv2.imread(depthname)
+    depthimg = cv2.imread(depthname,cv2.IMREAD_GRAYSCALE)
+    img = np.concatenate((rgbimg, depthimgview), axis=1)
+    
   if k == 13:
     # Get current positions of trackbars
     nclusters = cv2.getTrackbarPos('Clusters','image')
