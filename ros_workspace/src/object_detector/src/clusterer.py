@@ -14,12 +14,6 @@ from matplotlib import pyplot as plt
 
 def clusterer(imgrgb,imgdepth,nclusters,depth_weight,coord_weight,depth_thresup,depth_thresdown):
 
-  # TODO divide image it into 2 or 3 sections with adaptive thresholding
-  # Maybe 40 threshold is fine
-  #~ hist = cv2.calcHist([imgdepth],[0],None,[255],[1,256])
-  #~ plt.hist(imgdepth.ravel(),255,[1,256]);
-  #~ plt.show()
-  
   height, width, channels = imgrgb.shape
 
   # Convert the image to Lab color space 
@@ -57,7 +51,7 @@ def clusterer(imgrgb,imgdepth,nclusters,depth_weight,coord_weight,depth_thresup,
 
   feature_vectorarray = feature_vector.reshape(height*width,6)
   
-  # Remove useless data based on the depth camera
+  # Remove noisy data based on the depth camera
   if depth_weight != 0:
     conditionup = feature_vectorarray[:,-1] < depth_thresup * depth_weight
     conditiondown = feature_vectorarray[:,-1] > depth_thresdown * depth_weight
@@ -66,7 +60,7 @@ def clusterer(imgrgb,imgdepth,nclusters,depth_weight,coord_weight,depth_thresup,
   
   start_time = time.time()
   # TODO check other methods of clustering
-  kmeans = KMeans(n_clusters=nclusters,n_jobs=-1).fit(feature_vectorarray[:,[1,2,5]]) # TODO use only a and b ?
+  kmeans = KMeans(n_clusters=nclusters,n_jobs=-1).fit(feature_vectorarray[:,[0,1,2,5]]) # TODO use only a and b ?
   elapsed_time = time.time() - start_time
   print "\nKmeans with", nclusters, "clusters is done with elapsed time", elapsed_time, "s!"
   segmimg = np.zeros((height,width,3),dtype=np.uint8)
@@ -111,7 +105,7 @@ if __name__ == '__main__':
   nclusters = doc["clustering"]["number_of_clusters"] # TODO maybe find it from histogram of RGB
   depth_weight = doc["clustering"]["depth_weight"]
   coord_weight = doc["clustering"]["coordinates_weight"]
-  depth_thresup = doc["clustering"]["depth_thresup"]  # TODO maybe find it from histogram of Depth
+  depth_thresup = doc["clustering"]["depth_thresup"]
   depth_thresdown = doc["clustering"]["depth_thresdown"]
   # Load the color image
   imgrgb = cv2.imread(rgbname)
