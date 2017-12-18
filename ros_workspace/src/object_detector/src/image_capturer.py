@@ -7,9 +7,6 @@ import numpy as np
 import time
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
-
-import clusterer
-import metaproccessor
 import gui_editor
 
 class image_capturer:
