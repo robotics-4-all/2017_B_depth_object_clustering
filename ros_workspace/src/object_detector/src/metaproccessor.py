@@ -13,7 +13,7 @@ def intersection(a,b):
     return ()
   return (x, y, w, h)
   
-def is_sameplane(points1, points2,threshold):
+def is_sameplane(points1, points2, threshold):
   # These two vectors are in the plane
   v1 = points1[2] - points1[0]
   v2 = points1[1] - points1[0]
@@ -111,7 +111,7 @@ def metaproccessor(img,rgbimg,imgdepth,nclusters,minsize):
   vis1 = np.concatenate((rgbimg, cv2.cvtColor(imgdepth,cv2.COLOR_GRAY2RGB), img), axis=1)
   vis2 = np.concatenate((cv2.cvtColor(overall_mask,cv2.COLOR_GRAY2RGB),img_mask,imgproc), axis=1)
   finalvis = np.concatenate((vis1, vis2), axis=0)
-  return finalvis
+  return [finalvis, final_contours]
   
 if __name__ == '__main__':
   with open("../cfg/conf.yaml", 'r') as stream:

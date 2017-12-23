@@ -6,18 +6,39 @@ import yaml
 import numpy as np
 import time
 from sensor_msgs.msg import Image
+from object_detector.msg import Detected_object
 from cv_bridge import CvBridge, CvBridgeError
 import gui_editor
 
-class image_capturer:
+class DetectedObject:
+  def __init__(self, nameid, x, y, z, width, height):
+    self.nameid = nameid
+    self.x = x
+    self.y = y
+    self.z = z
+    self.width = width
+    self.height = height
+    self.mu = (x,y,z)
+    self.sigma = 1
   
+  def __str__(self):
+    string_to_print = 'Oject' + str(self.nameid) + ':(x:' + str(self.x) + ',y:' + str(self.y) + ',z:' + str(self.z) + ', width:' + str(self.width) +  ',height:' + str(self.height) + ')'
+    return string_to_print
+    
+  def update_gaussdist(self, sigma, mu):
+    self.mu = mu
+    self.sigma = sigma
+
+class image_capturer:  
   def __init__(self):
     self.rgb_sub = rospy.Subscriber("/camera/rgb/image_color", Image, self.Rgbcallback)
     self.dpth_sub = rospy.Subscriber("/camera/depth_registered/image", Image, self.Depthcallback)
+    self.obje_pub = rospy.Publisher('/object_found', Detected_object, queue_size=10)
     self.bridge = CvBridge()
     self.desired_shape = (336, 252)
     self.rgbimg = np.ndarray(shape=self.desired_shape, dtype = np.uint8)
     self.depthimg = np.ndarray(shape=self.desired_shape, dtype = np.uint8)
+    self.detected_objects = []
     print "\nPress R if you want to trigger GUI for object detection..."
     print "Press Esc if you want to end the suffer of this node...\n"
     
@@ -73,8 +94,31 @@ class image_capturer:
     except CvBridgeError as e:
       print(e)
   
+  def UpdatheworldCallback(self):
+    for det_object in self.detected_objects:
+      msg = Detected_object()
+      msg.nameid = det_object.nameid
+      msg.x = det_object.x
+      msg.y = det_object.y
+      msg.z = det_object.z
+      msg.width = det_object.width
+      msg.height = det_object.height
+      self.obje_pub.publish(msg)
+  
   def Process(self):
-    gui_editor.gui_editor(self.rgbimg, self.depthimg)
+    bounding_boxes = gui_editor.gui_editor(self.rgbimg, self.depthimg)
+    counter = len(self.detected_objects)
+    for c in bounding_boxes:
+      x, y, w, h = cv2.boundingRect(c)
+      # TODO identify the same objects and update them
+      z = self.depthimg[y+h/2][x+w/2] * 0.01
+      centerx = (self.desired_shape[0]/2 - (x+w/2) ) * 0.01
+      centery = (self.desired_shape[1] - (y+h/2) ) * 0.01
+      print centerx,centery,z
+      self.detected_objects.append(DetectedObject(counter, centerx, z, centery, w, h))
+      counter += 1
+    self.UpdatheworldCallback()
+    
   
 def main(args):
   ic = image_capturer()
