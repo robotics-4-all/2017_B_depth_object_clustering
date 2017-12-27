@@ -60,7 +60,7 @@ def gui_editor(rgbimg,depthimg):
       # Apply the proccesing functions
       start_time = time.time()
       [clusteredimg, img] = clusterer.clusterer(rgbimg,depthimg,nclusters,depth_weight,coord_weight,depth_thresup,depth_thresdown)
-      [img, bounding_boxes] = metaproccessor.metaproccessor(clusteredimg,rgbimg,depthimg,nclusters,150)
+      [img, bounding_boxes] = metaproccessor.metaproccessor(clusteredimg,rgbimg,depthimg,nclusters)
       elapsed_time = time.time() - start_time
       print "Object detection is done in time:", elapsed_time,"s!"
       print "Press ENTER to start or Esc to exit."

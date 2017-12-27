@@ -35,7 +35,7 @@ def removearray(L,arr):
       raise ValueError('Array not found in list.')
   
 
-def metaproccessor(img,rgbimg,imgdepth,nclusters,minsize):
+def metaproccessor(img,rgbimg,imgdepth,nclusters):
   with open("../cfg/conf.yaml", 'r') as stream:
     try:
       doc = yaml.load(stream)
