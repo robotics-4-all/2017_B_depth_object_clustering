@@ -67,8 +67,9 @@ def metaproccessor(img,rgbimg,imgdepth,nclusters,minsize):
     mask = cv2.erode(mask,np.ones((2,2),np.uint8),iterations = 1)
     
     image, contours, hier = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    for c in contours[0:len(contours):2]: # TODO fix this, every contour is double
-      if cv2.contourArea(c) > minsize:
+    for c in contours[0:len(contours)]: # TODO fix this, every contour is double
+      x, y, w, h = cv2.boundingRect(c)
+      if w * h > 500:
         prefinal_contours.append(c)
     overall_mask = np.bitwise_or(mask, overall_mask)
 
