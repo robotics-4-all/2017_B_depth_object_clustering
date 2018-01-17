@@ -27,7 +27,7 @@ def separate_objects_from_floorandwall(imglab, imgcoord, depth_weight, depth_thr
     condition = np.logical_and(conditionup, conditiondown)
     feature_vectorarray = feature_vectorarray[np.where(condition)]
   
-  kmeans = KMeans(n_clusters=2 ,n_jobs=-1).fit(feature_vectorarray[:,[1,2,5]]) # TODO add Luminosity
+  kmeans = KMeans(n_clusters=2 ,n_jobs=-1).fit(feature_vectorarray[:,[0,1,2,5]]) # TODO Luminosity removes also some white objects from white floor
   
   processed_imgdepth = imgcoord[:,:,2].copy()
   # Find the cluster that has the furthest points. Don't look thresholded ones.

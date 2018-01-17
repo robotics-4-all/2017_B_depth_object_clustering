@@ -36,15 +36,16 @@ class TFBroadcaster:
   def Objectcallback(self, msg):
     self.counter_of_detected_objects += 1
     self.detected_objects.append(DetectedObject(msg.nameid, msg.x, msg.y, msg.z, msg.width, msg.height))
+    print len(self.detected_objects)
 
   def PublishTFs(self, event):
-    print len(self.detected_objects)
     for obj in self.detected_objects:
       #~ rospy.sleep(0.1)
       t = geometry_msgs.msg.TransformStamped()
-      t.header.frame_id = "kinect"
+      t.header.frame_id = "camera_rgb_optical_frame"
+      #~ t.header.frame_id = "map"
       t.header.stamp = rospy.Time.now()
-      t.child_frame_id = str(obj.nameid)
+      t.child_frame_id = "Object" + str(obj.nameid)
       t.transform.translation.x = obj.x
       t.transform.translation.y = obj.y
       t.transform.translation.z = obj.z

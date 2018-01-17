@@ -39,6 +39,7 @@ def gui_editor(rgbimg,depthimg):
   cv2.setTrackbarPos('Depth ThresDown','image', doc["clustering"]["depth_thresdown"])
 
   print "Press ENTER to start or Esc to exit."
+  bounding_boxes = []
   while(1):
     cv2.imshow('image',img)
     k = cv2.waitKey(1) & 0xFF
