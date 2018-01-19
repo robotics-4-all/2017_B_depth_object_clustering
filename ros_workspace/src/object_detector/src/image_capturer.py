@@ -5,7 +5,7 @@ import cv2
 import yaml
 import numpy as np
 import time
-from sensor_msgs.msg import Image, PointCloud2
+from sensor_msgs.msg import Image, PointCloud2, CameraInfo
 import sensor_msgs.point_cloud2 as pc2
 
 from object_detector.msg import Detected_object
@@ -22,6 +22,9 @@ class DetectedObject:
     self.height = height
     self.mu = (x,y,z)
     self.sigma = 1
+    
+    self.normalx = np.random.normal(x, width)
+    self.normaly = np.random.normal(y, height)
   
   def __str__(self):
     string_to_print = 'Oject' + str(self.nameid) + ':(x:' + str(self.x) + ',y:' + str(self.y) + ',z:' + str(self.z) + ', width:' + str(self.width) +  ',height:' + str(self.height) + ')'
@@ -37,6 +40,8 @@ class image_capturer:
     self.dpth_sub = rospy.Subscriber("/camera/depth_registered/image", Image, self.Depthcallback)
     self.pcl_sub = rospy.Subscriber("/camera/depth_registered/points", PointCloud2, self.PointcloudCallback)
     self.dpth_raw_sub = rospy.Subscriber("/camera/depth_registered/image_raw", Image, self.Rawdepthcallback)
+    self.camera_info_sub = rospy.Subscriber("camera/rgb/camera_info", CameraInfo, self.CameraInfocallback)
+    # TODO subscribe only once
     
     self.obje_pub = rospy.Publisher('/object_found', Detected_object, queue_size=10)
     self.bridge = CvBridge()
@@ -48,9 +53,9 @@ class image_capturer:
     self.depthimg = np.ndarray(shape=self.desired_shape, dtype = np.uint8)
     self.depthrawimg = np.ndarray(shape=self.desired_shape, dtype = np.uint8)
     self.pcl = PointCloud2()
-    # Stores the overall objects that have been found
+    # Stores the overall objects that have been found.
     self.detected_objects = []
-    # Stores the objects that have been found in the current frame
+    # Stores the objects that have been found in the current frame.
     self.newly_detected_objects = []
     print "\nPress R if you want to trigger GUI for object detection..."
     print "Press Esc if you want to end the suffer of this node...\n"
@@ -66,6 +71,12 @@ class image_capturer:
         self.depth_thresdown = doc["clustering"]["depth_thresdown"]
       except yaml.YAMLError as exc:
         print(exc) 
+  
+  def CameraInfocallback(self, msg_info):
+    self.cx_d = msg_info.K[2]
+    self.cy_d = msg_info.K[5]
+    self.fx_d = msg_info.K[0]
+    self.fy_d = msg_info.K[4]
   
   def Rgbcallback(self,msg_rgb):
     try:
@@ -83,7 +94,7 @@ class image_capturer:
         self.Process()
         print "\nPress R if you want to trigger GUI for object detection..."
         print "Press Esc if you want to end the suffer of this node...\n"
-      if k == 27: # if you press Esc kill the node
+      if k == 27: # if you press Esc, kill the node
         rospy.signal_shutdown("Whatever")
     except CvBridgeError as e:
       print(e)
@@ -139,9 +150,15 @@ class image_capturer:
       # Get the point from point cloud of the corresponding pixel.
       # Multiply by 2 the pixel's position, because I have resized-scaled the images by 2. 
       coords = self.return_pcl(centerx * 2, centery * 2, self.pcl)
+      # Based on formula: x3D = (x * 2 - self.cx_d) * z3D/self.fx_d
+      # Based on formula: y3D = (y * 2 - self.cy_d) * z3D/self.fy_d
+      real_width = 2 * w * coords[2]/self.fx_d
+      real_height = 2 * h * coords[2]/self.fy_d
+      
       # TODO take into mind that there going to be some gaps in the objects
       #      a fix would be to take the median value of the bounding box
-      det_object = DetectedObject(counter, coords[0], coords[1], coords[2], w, h)
+      #      self.depthrawimg[y][x] * 0.001 = coords[2]
+      det_object = DetectedObject(counter, coords[0], coords[1], coords[2], real_width, real_height)
       self.detected_objects.append(det_object)
       self.newly_detected_objects.append(det_object)
       counter += 1
