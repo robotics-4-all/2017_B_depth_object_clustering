@@ -41,13 +41,17 @@ class image_capturer:
     self.obje_pub = rospy.Publisher('/object_found', Detected_object, queue_size=10)
     self.bridge = CvBridge()
     self.desired_shape = (480, 640) # initial shape
+    # Divide it by a number, to scale the image and make computations faster.
     self.desired_shape = map(lambda x: x/2, self.desired_shape)
     
     self.rgbimg = np.ndarray(shape=self.desired_shape, dtype = np.uint8)
     self.depthimg = np.ndarray(shape=self.desired_shape, dtype = np.uint8)
     self.depthrawimg = np.ndarray(shape=self.desired_shape, dtype = np.uint8)
     self.pcl = PointCloud2()
+    # Stores the overall objects that have been found
     self.detected_objects = []
+    # Stores the objects that have been found in the current frame
+    self.newly_detected_objects = []
     print "\nPress R if you want to trigger GUI for object detection..."
     print "Press Esc if you want to end the suffer of this node...\n"
     
@@ -103,13 +107,14 @@ class image_capturer:
     except CvBridgeError as e:
       print(e)
   
-  def Rawdepthcallback(self,msg_raw_depth):
+  def Rawdepthcallback(self,msg_raw_depth): # TODO remove it, unless you need it for better depth image!
     # Raw image from device. Contains uint16 depths in mm.
     tempimg = self.bridge.imgmsg_to_cv2(msg_raw_depth, "16UC1")
     self.depthrawimg = cv2.resize(tempimg, tuple(reversed(self.desired_shape)), interpolation = cv2.INTER_AREA)
   
   def UpdatheworldCallback(self):
-    for det_object in self.detected_objects:
+    # For every new object that was found, send it to the tf2_broadcaster
+    for det_object in self.newly_detected_objects:
       msg = Detected_object()
       msg.nameid = det_object.nameid
       msg.x = det_object.x
@@ -118,33 +123,38 @@ class image_capturer:
       msg.width = det_object.width
       msg.height = det_object.height
       self.obje_pub.publish(msg)
+    # Empty the list newly_detected_objects
+    del self.newly_detected_objects[:]
   
   def Process(self):
     bounding_boxes = gui_editor.gui_editor(self.rgbimg, self.depthimg)
     counter = len(self.detected_objects)
+    # For every newly found object.
     for c in bounding_boxes:
       x, y, w, h = cv2.boundingRect(c)
       # TODO identify the same objects and update them
+      # Take the center of the bounding box of the object.
       centerx = x + w/2
       centery = y + h/2
-      print centerx, centery, self.depthrawimg[centery][centerx]
+      # Get the point from point cloud of the corresponding pixel.
+      # Multiply by 2 the pixel's position, because I have resized-scaled the images by 2. 
       coords = self.return_pcl(centerx * 2, centery * 2, self.pcl)
-      self.detected_objects.append(DetectedObject(counter, coords[0], coords[1], coords[2], w, h))
+      # TODO take into mind that there going to be some gaps in the objects
+      #      a fix would be to take the median value of the bounding box
+      det_object = DetectedObject(counter, coords[0], coords[1], coords[2], w, h)
+      self.detected_objects.append(det_object)
+      self.newly_detected_objects.append(det_object)
       counter += 1
     self.UpdatheworldCallback()
     
   def PointcloudCallback(self,msg_pcl):
     self.pcl = msg_pcl
-    #~ print self.pcl.width 640
-    #~ print self.pcl.height 480
-    #~ print self.pcl.fields, "\n"
     
   def return_pcl(self, x_img, y_img, pcl) :
     if (y_img >= pcl.height) or (x_img >= pcl.width):
         return -1
     data_out = list(pc2.read_points(pcl, field_names=("x", "y", "z"), skip_nans=True, uvs=[[x_img, y_img]]))
     int_data = data_out[0]
-    print "For x:", str(x_img), ", y:", str(y_img), ":", int_data
     return int_data
     
   

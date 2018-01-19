@@ -1,4 +1,5 @@
-#!/usr/bin/env python  
+#!/usr/bin/env python 
+# Helped by http://wiki.ros.org/tf2/Tutorials/Adding%20a%20frame%20%28Python%29
 import rospy
 import tf2_ros
 import tf2_msgs.msg
@@ -12,26 +13,6 @@ class TFBroadcaster:
     self.sub_det_obj = rospy.Subscriber("/object_found", Detected_object, self.Objectcallback)
     self.detected_objects = []
     self.counter_of_detected_objects = 0
-
-    #~ while not rospy.is_shutdown():
-      #~ # Run this loop at about 10Hz
-      #~ rospy.sleep(0.1)
-
-      #~ t = geometry_msgs.msg.TransformStamped()
-      #~ t.header.frame_id = "kinect"
-      #~ t.header.stamp = rospy.Time.now()
-      #~ t.child_frame_id = "object1"
-      #~ t.transform.translation.x = 1.0
-      #~ t.transform.translation.y = 2.0
-      #~ t.transform.translation.z = 3.0
-
-      #~ t.transform.rotation.x = 0.0
-      #~ t.transform.rotation.y = 0.0
-      #~ t.transform.rotation.z = 0.0
-      #~ t.transform.rotation.w = 1.0
-
-      #~ tfm = tf2_msgs.msg.TFMessage([t])
-      #~ self.pub_tf.publish(tfm)
       
   def Objectcallback(self, msg):
     self.counter_of_detected_objects += 1
@@ -42,14 +23,14 @@ class TFBroadcaster:
     for obj in self.detected_objects:
       #~ rospy.sleep(0.1)
       t = geometry_msgs.msg.TransformStamped()
+      # It is the same Header of the messages of pointcloud.
       t.header.frame_id = "camera_rgb_optical_frame"
-      #~ t.header.frame_id = "map"
       t.header.stamp = rospy.Time.now()
       t.child_frame_id = "Object" + str(obj.nameid)
       t.transform.translation.x = obj.x
       t.transform.translation.y = obj.y
       t.transform.translation.z = obj.z
-
+      
       t.transform.rotation.x = 0.0
       t.transform.rotation.y = 0.0
       t.transform.rotation.z = 0.0
