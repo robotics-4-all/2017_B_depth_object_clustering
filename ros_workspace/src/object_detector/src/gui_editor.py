@@ -19,7 +19,7 @@ def gui_editor(rgbimg,depthimg):
       print(exc)
   
   # Create a window with initial RGB and Depth images
-  img = np.concatenate((rgbimg, cv2.cvtColor(depthimg,cv2.COLOR_GRAY2RGB)), axis=1)
+  img = np.concatenate((rgbimg, cv2.cvtColor(depthimg,cv2.COLOR_GRAY2BGR)), axis=1)
   cv2.namedWindow('image')
 
   # Create trackbars for parameters of clusterer

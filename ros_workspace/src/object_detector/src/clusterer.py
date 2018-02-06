@@ -16,9 +16,9 @@ def separate_objects_from_floorandwall(imglab, imgcoord, depth_weight, depth_thr
   feature_vector = np.zeros((height,width,6))
   feature_vector[:,:,0:3] = imglab
   feature_vector[:,:,3:5] = imgcoord[:,:,0:1] * 0 # x+y
-  
+
   depth_weight = 0.04
-  feature_vector[:,:,5] = imgcoord[:,:,2] * depth_weight # z
+  feature_vector[:,:,5] = imgcoord[:,:,2].copy() * depth_weight # z
   feature_vectorarray = feature_vector.reshape(height*width,6)
 
   if depth_weight != 0:
@@ -30,6 +30,7 @@ def separate_objects_from_floorandwall(imglab, imgcoord, depth_weight, depth_thr
   kmeans = KMeans(n_clusters=2 ,n_jobs=-1).fit(feature_vectorarray[:,[0,1,2,5]]) # TODO Luminosity removes also some white objects from white floor
   
   processed_imgdepth = imgcoord[:,:,2].copy()
+  
   # Find the cluster that has the furthest points. Don't look thresholded ones.
   depth_sum_cluster0 = []
   depth_sum_cluster1 = []
@@ -62,13 +63,12 @@ def separate_objects_from_floorandwall(imglab, imgcoord, depth_weight, depth_thr
         processed_imgdepth[i,j] = 0
   return processed_imgdepth
 
-
 def clusterer(imgrgb,imgdepth,nclusters,depth_weight,coord_weight,depth_thresup,depth_thresdown):
 
   height, width, channels = imgrgb.shape
 
-  # Convert the image to Lab color space 
-  imglab = cv2.cvtColor(imgrgb, cv2.COLOR_RGB2Lab)
+  # Convert the image from BGR to Lab color space
+  imglab = cv2.cvtColor(imgrgb, cv2.COLOR_BGR2Lab)
 
   L = imglab[:,:,0]
   a = imglab[:,:,1]
@@ -79,7 +79,7 @@ def clusterer(imgrgb,imgdepth,nclusters,depth_weight,coord_weight,depth_thresup,
   sigma_L = np.std(L)
   sigma_a = np.std(a)
   sigma_b = np.std(b)
-  imglab = (3/(sigma_L+sigma_a+sigma_b)) * imglab
+  #~ imglab = (3/(sigma_L+sigma_a+sigma_b)) * imglab
 
   imgcoord = np.zeros((height,width,3), dtype = np.uint8)
   imgcoord[:,:,0] = np.transpose(np.tile(np.array(range(height)),(width,1))) + 1
@@ -99,7 +99,7 @@ def clusterer(imgrgb,imgdepth,nclusters,depth_weight,coord_weight,depth_thresup,
   feature_vector[:,:,0:3] = imglab
   feature_vector[:,:,3:5] = imgcoord[:,:,0:1] * coord_weight # x+y
   feature_vector[:,:,5] = separate_objects_from_floorandwall(imglab, imgcoord, depth_weight, 150, depth_thresdown) * depth_weight # z
-
+  
   feature_vectorarray = feature_vector.reshape(height*width,6)
   
   # Remove noisy data based on the depth camera
@@ -108,6 +108,17 @@ def clusterer(imgrgb,imgdepth,nclusters,depth_weight,coord_weight,depth_thresup,
     conditiondown = feature_vectorarray[:,-1] > depth_thresdown * depth_weight
     condition = np.logical_and(conditionup, conditiondown)
     feature_vectorarray = feature_vectorarray[np.where(condition)]
+  
+  # Find the number of clusters based on histogram
+  #~ import matplotlib.pyplot as plt
+  #~ print np.amax(feature_vectorarray[:,0])
+  #~ hist1 = np.histogram(feature_vectorarray[:,0].astype(np.uint8), bins = np.arange(256))
+  #~ print hist1
+  #~ print np.histogram(feature_vectorarray[:,1])
+  #~ print np.histogram(feature_vectorarray[:,2])
+  #~ plt.hist(hist1[0], bins = np.arange(256))  # arguments are passed to np.histogram
+  #~ plt.title("Histogram")
+  #~ plt.show()
   
   start_time = time.time()
   # TODO check other methods of clustering
@@ -134,7 +145,9 @@ def clusterer(imgrgb,imgdepth,nclusters,depth_weight,coord_weight,depth_thresup,
         segmimg[i,j,:] = 0
   elapsed_time = time.time() - start_time
   print "Labelling is done in time:", elapsed_time,"s!"
-  vis = np.concatenate((imgrgb, cv2.cvtColor(imgdepth,cv2.COLOR_GRAY2RGB), segmimg), axis=1)
+  #~ print cv2.cvtColor(feature_vector[:,:,5]*255,cv2.COLOR_GRAY2RGB).shape
+  #~ print np.amax(feature_vector[:,:,5] / depth_weight)
+  vis = np.concatenate((imgrgb, cv2.cvtColor(imgdepth,cv2.COLOR_GRAY2BGR), segmimg), axis=1)
   name = "Results/result_" + str(nclusters) + ".png"
   nameall = "Results/resultall_" + str(nclusters) + ".png"
   cv2.imwrite(name,segmimg)

@@ -4,7 +4,7 @@ import rospy
 import cv2
 import yaml
 import numpy as np
-import time
+from sklearn.cluster import KMeans, MeanShift
 from sensor_msgs.msg import Image, PointCloud2, CameraInfo
 import sensor_msgs.point_cloud2 as pc2
 
@@ -13,26 +13,42 @@ from cv_bridge import CvBridge, CvBridgeError
 import gui_editor
 
 class DetectedObject:
-  def __init__(self, nameid, x, y, z, width, height):
-    self.nameid = nameid
+  def __init__(self, name_id, x, y, z ,width, height, crop_rgb_img, crop_depth_img):
+    self.name_id = name_id
     self.x = x
     self.y = y
     self.z = z
-    self.width = width
-    self.height = height
+    self.width = width    # real dimensions
+    self.height = height  # real dimensions
+    self.depth = 0
     self.mu = (x,y,z)
-    self.sigma = 1
+    self.crop_rgbimg = crop_rgb_img
+    self.crop_depthimg = crop_depth_img
     
-    self.normalx = np.random.normal(x, width)
-    self.normaly = np.random.normal(y, height)
-  
+    # Find the two dominants colors of the detected object using k-means with two clusters.
+    # TODO maybe do it with Lab colorspace again
+    height_img, width_img, channels = crop_rgb_img.shape
+    image = cv2.cvtColor(crop_rgb_img, cv2.COLOR_BGR2RGB)
+    rgb_array = image.reshape(height_img * width_img, channels)
+    num_dom_colors = 2
+    kmeans = KMeans(n_clusters=num_dom_colors, n_jobs=-1, init='random').fit(rgb_array)
+    self.dom_colors = kmeans.cluster_centers_.astype(np.uint8)
+
   def __str__(self):
-    string_to_print = 'Oject' + str(self.nameid) + ':(x:' + str(self.x) + ',y:' + str(self.y) + ',z:' + str(self.z) + ', width:' + str(self.width) +  ',height:' + str(self.height) + ')'
+    string_to_print = 'Object' + str(self.name_id) + ':(x:' + str(self.x) + ',y:' + str(self.y) + ',z:' + str(self.z) + ', width:' + str(self.width) +  ',height:' + str(self.height) + ')'
     return string_to_print
-    
-  def update_gaussdist(self, sigma, mu):
-    self.mu = mu
-    self.sigma = sigma
+  
+  def is_thesameobject(self):
+    return 0
+  
+  def update_normdist(self, newly_observed_z):
+    if self.depth < abs(newly_observed_z - self.z):
+      self.depth = abs(newly_observed_z - self.z)
+  
+  def norm_function(self, x_inp, y_inp):
+    fx = np.exp(-(x_inp-self.x)**2/(2*(self.width**2))) / np.sqrt(2 * np.pi * self.width**2)
+    fy = np.exp(-(y_inp-self.y)**2/(2*(self.height**2))) / np.sqrt(2 * np.pi * self.height**2)
+    return fx * fy
 
 class image_capturer:  
   def __init__(self):
@@ -85,7 +101,7 @@ class image_capturer:
       cv_image_resized = cv2.resize(cv_image, tuple(reversed(self.desired_shape)), interpolation = cv2.INTER_AREA)
       self.rgbimg = cv_image_resized
       try:
-        img = np.concatenate((self.rgbimg, cv2.cvtColor(self.depthimg,cv2.COLOR_GRAY2RGB)), axis=1)
+        img = np.concatenate((self.rgbimg, cv2.cvtColor(self.depthimg,cv2.COLOR_GRAY2BGR)), axis=1)
         cv2.imshow("Combined image from my node", img)
       except ValueError as valerr:
         print "Images from channels are not ready yet..."
@@ -103,7 +119,7 @@ class image_capturer:
     try:
       # The depth image is a single-channel float32 image
       # the values is the distance in mm in z axis
-      cv_image = self.bridge.imgmsg_to_cv2(msg_depth, "32FC1")
+      cv_image = self.bridge.imgmsg_to_cv2(msg_depth, desired_encoding="passthrough")
       # Convert the depth image to a Numpy array since most cv2 functions
       # require Numpy arrays.
       cv_image_array = np.array(cv_image, dtype = np.float64)
@@ -127,7 +143,7 @@ class image_capturer:
     # For every new object that was found, send it to the tf2_broadcaster
     for det_object in self.newly_detected_objects:
       msg = Detected_object()
-      msg.nameid = det_object.nameid
+      msg.nameid = det_object.name_id
       msg.x = det_object.x
       msg.y = det_object.y
       msg.z = det_object.z
@@ -158,7 +174,12 @@ class image_capturer:
       # TODO take into mind that there going to be some gaps in the objects
       #      a fix would be to take the median value of the bounding box
       #      self.depthrawimg[y][x] * 0.001 = coords[2]
-      det_object = DetectedObject(counter, coords[0], coords[1], coords[2], real_width, real_height)
+      
+      # Crop the image and get just the bounding box.
+      crop_rgbimg = self.rgbimg[y:y+h, x:x+w]
+      crop_depthimg = self.depthimg[y:y+h, x:x+w]
+      
+      det_object = DetectedObject(counter, coords[0], coords[1], coords[2], real_width, real_height, crop_rgbimg, crop_depthimg)
       self.detected_objects.append(det_object)
       self.newly_detected_objects.append(det_object)
       counter += 1
@@ -174,7 +195,6 @@ class image_capturer:
     int_data = data_out[0]
     return int_data
     
-  
 def main(args):
   ic = image_capturer()
   rospy.init_node('image_capturer', anonymous=True)

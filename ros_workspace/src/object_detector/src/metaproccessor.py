@@ -109,8 +109,8 @@ def metaproccessor(img,rgbimg,imgdepth,nclusters):
         
   print "Number of objects detected:", object_counter
   img_mask = cv2.bitwise_and(rgbimg, rgbimg, mask = cv2.bitwise_not(overall_mask))
-  vis1 = np.concatenate((rgbimg, cv2.cvtColor(imgdepth,cv2.COLOR_GRAY2RGB), img), axis=1)
-  vis2 = np.concatenate((cv2.cvtColor(overall_mask,cv2.COLOR_GRAY2RGB),img_mask,imgproc), axis=1)
+  vis1 = np.concatenate((rgbimg, cv2.cvtColor(imgdepth,cv2.COLOR_GRAY2BGR), img), axis=1)
+  vis2 = np.concatenate((cv2.cvtColor(overall_mask,cv2.COLOR_GRAY2BGR),img_mask,imgproc), axis=1)
   finalvis = np.concatenate((vis1, vis2), axis=0)
   return [finalvis, final_contours]
   
