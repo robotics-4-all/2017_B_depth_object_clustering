@@ -1,10 +1,11 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import sys
 import rospy
 import cv2
 import yaml
 import numpy as np
-from sklearn.cluster import KMeans, MeanShift
+from sklearn.cluster import KMeans
 from sensor_msgs.msg import Image, PointCloud2, CameraInfo
 import sensor_msgs.point_cloud2 as pc2
 
@@ -26,19 +27,50 @@ class DetectedObject:
     self.crop_depthimg = crop_depth_img
     
     # Find the two dominants colors of the detected object using k-means with two clusters.
-    # TODO maybe do it with Lab colorspace again
+    # TODO maybe do it with Lab color space again
     height_img, width_img, channels = crop_rgb_img.shape
-    image = cv2.cvtColor(crop_rgb_img, cv2.COLOR_BGR2RGB)
-    rgb_array = image.reshape(height_img * width_img, channels)
+    # Convert Image from BGR to RGB for better visualization.
+    # image = cv2.cvtColor(crop_rgb_img, cv2.COLOR_BGR2RGB)
+    image = cv2.cvtColor(crop_rgb_img, cv2.COLOR_BGR2LAB)
+    image_array = image.reshape(height_img * width_img, channels)
     num_dom_colors = 2
-    kmeans = KMeans(n_clusters=num_dom_colors, n_jobs=-1, init='random').fit(rgb_array)
-    self.dom_colors = kmeans.cluster_centers_.astype(np.uint8)
+    kmeans = KMeans(n_clusters=num_dom_colors, n_jobs=-1, init='random').fit(image_array)
+    # Grab the number of different clusters and create a histogram based on the number of pixels assigned to each cluster
+    # After that find the cluster with most pixels - that will be the dominant color
+    numLabels = np.arange(0, len(np.unique(kmeans.labels_)) + 1)
+    (hist, _) = np.histogram(kmeans.labels_, bins=numLabels)
+    self.dom_colors = kmeans.cluster_centers_[np.argmax(hist)].astype(np.uint8)
 
   def __str__(self):
-    string_to_print = 'Object' + str(self.name_id) + ':(x:' + str(self.x) + ',y:' + str(self.y) + ',z:' + str(self.z) + ', width:' + str(self.width) +  ',height:' + str(self.height) + ')'
+    string_to_print = 'Object' + str(self.name_id) + ':(x:' + str(self.x) + ',y:' + str(self.y) + ',z:' + str(self.z) \
+                      + ', width:' + str(self.width) +  ',height:' + str(self.height) + ')'
     return string_to_print
   
-  def is_thesameobject(self):
+  def is_thesameobject(self, newly_found_object):
+    # Color distance
+    dist_color = np.linalg.norm(self.dom_colors - newly_found_object.dom_colors)
+
+    # L in [0, 100], a in [-127, 127], b in [-127, 127]
+    # And according to OpenCV L=L*255/100,a=a+128,b=b+128 for 8-bit images
+    # L in [0, 255], a in [1, 255], b in [1, 255]
+    norm_dist_color = dist_color / np.linalg.norm([255, 254, 254]) / 2
+    # Real Width and Height distance
+    dist_width = abs(self.width - newly_found_object.width)
+    norm_dist_width = dist_width / max(self.width, newly_found_object.width)
+    dist_height = abs(self.height - newly_found_object.height)
+    norm_dist_height = dist_height / max(self.height, newly_found_object.height)
+    # Use norm_function to get the probability to be the same object
+    dist_prob = 1 - self.norm_function(newly_found_object.x, newly_found_object.y)
+    print([norm_dist_color, norm_dist_width, norm_dist_height, dist_prob])
+    weight_color = 3
+    weight_width = 1
+    weight_height = 1
+    weight_prob = 4
+    norm_distances = [norm_dist_color, norm_dist_width, norm_dist_width, dist_prob]
+    weights = [weight_color, weight_width, weight_height, weight_prob]
+    dist_final = np.inner (norm_distances, weights)
+    norm_dist_final = dist_final / sum(weights)
+    print("Final distance for object" + str(newly_found_object.name_id+1) + " with object" +  str(self.name_id+1)+": " + str(dist_final))
     return 0
   
   def update_normdist(self, newly_observed_z):
@@ -46,8 +78,9 @@ class DetectedObject:
       self.depth = abs(newly_observed_z - self.z)
   
   def norm_function(self, x_inp, y_inp):
-    fx = np.exp(-(x_inp-self.x)**2/(2*(self.width**2))) / np.sqrt(2 * np.pi * self.width**2)
-    fy = np.exp(-(y_inp-self.y)**2/(2*(self.height**2))) / np.sqrt(2 * np.pi * self.height**2)
+    # Take formula of normal distribution and remove "/ np.sqrt(2 * np.pi * self.width**2)"
+    fx = np.exp(-((x_inp-self.x)**2)/(2*(self.width**2)))
+    fy = np.exp(-((y_inp-self.y)**2)/(2*(self.height**2)))
     return fx * fy
 
 class image_capturer:  
@@ -73,8 +106,8 @@ class image_capturer:
     self.detected_objects = []
     # Stores the objects that have been found in the current frame.
     self.newly_detected_objects = []
-    print "\nPress R if you want to trigger GUI for object detection..."
-    print "Press Esc if you want to end the suffer of this node...\n"
+    print("\nPress R if you want to trigger GUI for object detection...")
+    print("Press Esc if you want to end the suffer of this node...\n")
     
     # Read the parameters from the yaml file
     with open("../cfg/conf.yaml", 'r') as stream:
@@ -104,12 +137,12 @@ class image_capturer:
         img = np.concatenate((self.rgbimg, cv2.cvtColor(self.depthimg,cv2.COLOR_GRAY2BGR)), axis=1)
         cv2.imshow("Combined image from my node", img)
       except ValueError as valerr:
-        print "Images from channels are not ready yet..."
+        print("Images from channels are not ready yet...")
       k = cv2.waitKey(1) & 0xFF
       if k == 114: # if you press r, trigger the procressing
         self.Process()
-        print "\nPress R if you want to trigger GUI for object detection..."
-        print "Press Esc if you want to end the suffer of this node...\n"
+        print("\nPress R if you want to trigger GUI for object detection...")
+        print("Press Esc if you want to end the suffer of this node...\n")
       if k == 27: # if you press Esc, kill the node
         rospy.signal_shutdown("Whatever")
     except CvBridgeError as e:
@@ -140,16 +173,25 @@ class image_capturer:
     self.depthrawimg = cv2.resize(tempimg, tuple(reversed(self.desired_shape)), interpolation = cv2.INTER_AREA)
   
   def UpdatheworldCallback(self):
-    # For every new object that was found, send it to the tf2_broadcaster
-    for det_object in self.newly_detected_objects:
-      msg = Detected_object()
-      msg.nameid = det_object.name_id
-      msg.x = det_object.x
-      msg.y = det_object.y
-      msg.z = det_object.z
-      msg.width = det_object.width
-      msg.height = det_object.height
-      self.obje_pub.publish(msg)
+    # For every new object that was found, first check whether it exists and then send it to the tf2_broadcaster.
+    for newdet_object in self.newly_detected_objects:
+      same_flag = 0 # indicates if the newly found object is the same with the one is being comparised with
+      for olddet_object in self.detected_objects:
+        if olddet_object.is_thesameobject(newdet_object):
+          same_flag = 1
+          # break
+      if same_flag == 1:
+        continue
+      else:
+        self.detected_objects.append(newdet_object)
+        msg = Detected_object()
+        msg.nameid = newdet_object.name_id
+        msg.x = newdet_object.x
+        msg.y = newdet_object.y
+        msg.z = newdet_object.z
+        msg.width = newdet_object.width
+        msg.height = newdet_object.height
+        self.obje_pub.publish(msg)
     # Empty the list newly_detected_objects
     del self.newly_detected_objects[:]
   
@@ -180,7 +222,6 @@ class image_capturer:
       crop_depthimg = self.depthimg[y:y+h, x:x+w]
       
       det_object = DetectedObject(counter, coords[0], coords[1], coords[2], real_width, real_height, crop_rgbimg, crop_depthimg)
-      self.detected_objects.append(det_object)
       self.newly_detected_objects.append(det_object)
       counter += 1
     self.UpdatheworldCallback()
