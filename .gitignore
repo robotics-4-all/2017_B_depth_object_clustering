@@ -6,3 +6,5 @@ Database/
 ros_workspace/.catkin_workspace
 ros_workspace/build/
 ros_workspace/devel/
+ros_workspace/install
+.idea/
