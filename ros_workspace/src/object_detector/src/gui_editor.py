@@ -32,8 +32,8 @@ def gui_editor(rgb_img, depth_img):
 
             # Set the default values fot the track bars
             cv2.setTrackbarPos('Clusters', 'image', doc["clustering"]["number_of_clusters"])
-            cv2.setTrackbarPos('Depth Weight1', 'image', 4)
-            cv2.setTrackbarPos('Depth Weight2', 'image', 2)
+            cv2.setTrackbarPos('Depth Weight1', 'image', 3)
+            cv2.setTrackbarPos('Depth Weight2', 'image', 0)
             # ~ cv2.setTrackbarPos('Coord Weight','image', doc["clustering"]["coordinates_weight"])
             cv2.setTrackbarPos('Depth ThreshUp', 'image', doc["clustering"]["depth_thresup"])
             cv2.setTrackbarPos('Depth ThreshDown', 'image', doc["clustering"]["depth_thresdown"])
@@ -50,10 +50,7 @@ def gui_editor(rgb_img, depth_img):
                     n_clusters = cv2.getTrackbarPos('Clusters', 'image')
                     depth_weight_digit = cv2.getTrackbarPos('Depth Weight1', 'image')
                     depth_weight_power = cv2.getTrackbarPos('Depth Weight2', 'image')
-                    if depth_weight_digit == 0:
-                        depth_weight = 0
-                    else:
-                        depth_weight = depth_weight_digit ** (-depth_weight_power)
+                    depth_weight = depth_weight_digit * 10 ** (-depth_weight_power)
                     coord_weight = 0
                     depth_thresh_up = cv2.getTrackbarPos('Depth ThreshUp', 'image')
                     depth_thresh_down = cv2.getTrackbarPos('Depth ThreshDown', 'image')

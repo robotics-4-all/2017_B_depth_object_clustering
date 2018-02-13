@@ -34,9 +34,9 @@ class DetectedObject:
         self.x = x
         self.y = y
         self.z = z
-        self.width = width  # real dimensions
-        self.height = height  # real dimensions
-        self.depth = 0
+        self.width = width  # real dimension of object in x-axis
+        self.height = height  # real dimension of object in y-axis
+        self.length = 0 # real dimension of object in z-axis
         self.mu = (x, y, z)
         self.crop_rgb_img = crop_rgb_img
         self.crop_depth_img = crop_depth_img
@@ -61,52 +61,55 @@ class DetectedObject:
                           + str(self.z) + ', width:' + str(self.width) + ',height:' + str(self.height) + ')'
         return string_to_print
 
-    def is_the_same_object(self, newly_found_object):
+    def is_the_same_object(self, other_object):
         # Color distance
-        dist_color = np.linalg.norm(self.dom_colors - newly_found_object.dom_colors)
-        print_cielab_without_opencv(self.dom_colors)
-        print_cielab_without_opencv(newly_found_object.dom_colors)
+        dist_color = np.sqrt((int(self.dom_colors[0]) - int(other_object.dom_colors[0])) ** 2 +
+                             (int(self.dom_colors[1]) - int(other_object.dom_colors[1])) ** 2 +
+                             (int(self.dom_colors[2]) - int(other_object.dom_colors[2])) ** 2)
         # L in [0, 100], a in [-127, 127], b in [-127, 127]
         # And according to OpenCV L=L*255/100,a=a+128,b=b+128 for 8-bit images
         # L in [0, 255], a in [1, 255], b in [1, 255]
-        norm_dist_color = dist_color / np.linalg.norm([255, 254, 254]) / 2
+        norm_dist_color = dist_color / np.sqrt(255 ** 2 + 254 ** 2 + 254 ** 2) / 2
 
         # Real Width and Height distance
-        dist_width = abs(self.width - newly_found_object.width)
-        norm_dist_width = dist_width / max(self.width, newly_found_object.width)
-        dist_height = abs(self.height - newly_found_object.height)
-        norm_dist_height = dist_height / max(self.height, newly_found_object.height)
+        dist_width = abs(self.width - other_object.width)
+        norm_dist_width = dist_width / max(self.width, other_object.width)
+        dist_height = abs(self.height - other_object.height)
+        norm_dist_height = dist_height / max(self.height, other_object.height)
 
         # Use norm_function to get the probability to be the same object
-        dist_prob = 1 - self.norm_function(newly_found_object.x, newly_found_object.y, newly_found_object.z)
-
+        dist_prob = 1 - self.norm_function(other_object.x, other_object.y, other_object.z)
         print([norm_dist_color, norm_dist_width, norm_dist_height, dist_prob])
-        weights = [3, 1, 1, 4]
+        weights = [5, 1, 1, 10]
         norm_distances = [norm_dist_color, norm_dist_width, norm_dist_width, dist_prob]
         dist_final = np.inner(norm_distances, weights)
         norm_dist_final = dist_final / sum(weights)
         norm_prob_final = 1 - norm_dist_final
-        print("Final distance for object" + str(self.name_id + 1) + " with object" +
-              str(newly_found_object.name_id + 1) + ": " + str(dist_final))
+        print("Final normalised probability to be object-" + str(self.name_id + 1) + " same with object-" +
+              str(other_object.name_id + 1) + ": " + str(norm_prob_final) + "\n")
 
-        if norm_prob_final > 0.6:
-            # It is the same object - so you have to update the depth (z) of it.
-            self.update_norm_dist(newly_found_object.z)
-            return 0
-            # TODO make it 1
+        if norm_prob_final > 0.8:
+            # It is the same object - so you have to update the dimensions  of it.
+            # TODO maybe update the center as well.
+            self.update_dimensions(other_object)
+            return True
         else:
-            return 0
+            return False
 
-    def update_norm_dist(self, newly_observed_z):
-        if self.depth < abs(newly_observed_z - self.z):
-            self.depth = abs(newly_observed_z - self.z)
+    def update_dimensions(self, newly_observed_object):
+        # Update the width, height and length according to the new "frame" of the object.
+        self.width = max(self.width, newly_observed_object.width)
+        self.height = max(self.height, newly_observed_object.height)
+        if self.length < abs(newly_observed_object.z - self.z):
+            self.length = abs(newly_observed_object.z - self.z)
 
     def norm_function(self, x_inp, y_inp, z_inp):
         # Take formula of normal distribution and remove "/ np.sqrt(2 * np.pi * self.width**2)"
         fx = np.exp(-((x_inp - self.x) ** 2) / (2 * (self.width ** 2)))
         fy = np.exp(-((y_inp - self.y) ** 2) / (2 * (self.height ** 2)))
-        if self.depth != 0:
-            fz = np.exp(-((z_inp - self.z) ** 2) / (2 * (self.depth ** 2)))
+        # If you have never noticed the object again, you have no information about the length in z-axis.
+        if self.length != 0:
+            fz = np.exp(-((z_inp - self.z) ** 2) / (2 * (self.length ** 2)))
         else:
             fz = 1
         return fx * fy * fz
@@ -115,12 +118,11 @@ class DetectedObject:
 class ImageCapturer:
     def __init__(self):
         self.rgb_sub = rospy.Subscriber("/camera/rgb/image_color", Image, self.rgb_callback)
-        self.depth_sub = rospy.Subscriber("/camera/depth_registered/image", Image, self.depth_callback)
         self.pcl_sub = rospy.Subscriber("/camera/depth_registered/points", PointCloud2, self.pointcloud_callback)
         self.depth_raw_sub = rospy.Subscriber("/camera/depth_registered/image_raw", Image, self.raw_depth_callback)
         self.camera_info_sub = rospy.Subscriber("camera/rgb/camera_info", CameraInfo, self.camera_info_callback)
         # TODO subscribe only once
-        self.obje_pub = rospy.Publisher('/object_found', Detected_object, queue_size=10)
+        self.object_pub = rospy.Publisher('/object_found', Detected_object, queue_size=10)
 
         # Camera infos - they will be updated with the Callback, hopefully.
         self.cx_d = 0
@@ -136,7 +138,7 @@ class ImageCapturer:
 
         self.rgb_img = np.ndarray(shape=self.desired_shape, dtype=np.uint8)
         self.depth_img = np.ndarray(shape=self.desired_shape, dtype=np.uint8)
-        self.depthrawimg = np.ndarray(shape=self.desired_shape, dtype=np.uint8)
+        self.depth_raw_img = np.ndarray(shape=self.desired_shape, dtype=np.uint8)
         self.pcl = PointCloud2()
         # Stores the overall objects that have been found.
         self.detected_objects = []
@@ -172,10 +174,12 @@ class ImageCapturer:
             try:
                 img = np.concatenate((self.rgb_img, cv2.cvtColor(self.depth_img, cv2.COLOR_GRAY2BGR)), axis=1)
                 cv2.imshow("Combined image from my node", img)
-            except ValueError:
+            except ValueError as error:
+                print(error)
                 print("Images from channels are not ready yet...")
             k = cv2.waitKey(1) & 0xFF
-            if k == 114:  # if you press r, trigger the procressing
+            if k == 114:  # if you press r, trigger the processing
+                cv2.destroyAllWindows()
                 self.process()
                 print("\nPress R if you want to trigger GUI for object detection...")
                 print("Press Esc if you want to end the suffer of this node...\n")
@@ -184,53 +188,42 @@ class ImageCapturer:
         except CvBridgeError as e:
             print(e)
 
-    def depth_callback(self, msg_depth):  # TODO still too noisy!
-        try:
-            # The depth image is a single-channel float32 image
-            # the values is the distance in mm in z axis
-            cv_image = self.bridge.imgmsg_to_cv2(msg_depth, desired_encoding="passthrough")
-            # Convert the depth image to a Numpy array since most cv2 functions
-            # require Numpy arrays.
-            cv_image_array = np.array(cv_image, dtype=np.float64)
-            # Normalize the depth image to fall between 0 (black) and 1 (white) in order to view result
-            # Normalize the depth image to fall between 0 (black) and 255 (white) in order to write result
-            # http://docs.ros.org/electric/api/rosbag_video/html/bag__to__video_8cpp_source.html lines 95-125
-            cv_image_norm_write = cv_image_array.copy()
-            cv_image_norm_write = cv2.normalize(cv_image_array, cv_image_norm_write, 0, 255, cv2.NORM_MINMAX)
-            # Resize to the desired size
-            cv_image_resized_write = cv2.resize(cv_image_norm_write, tuple(reversed(self.desired_shape)),
-                                                interpolation=cv2.INTER_AREA)
-            self.depth_img = cv_image_resized_write.astype(np.uint8)
-        except CvBridgeError as e:
-            print(e)
-
-    def raw_depth_callback(self, msg_raw_depth):  # TODO remove it, unless you need it for better depth image!
+    def raw_depth_callback(self, msg_raw_depth):
         # Raw image from device. Contains uint16 depths in mm.
         temp_img = self.bridge.imgmsg_to_cv2(msg_raw_depth, "16UC1")
-        self.depthrawimg = cv2.resize(temp_img, tuple(reversed(self.desired_shape)), interpolation=cv2.INTER_AREA)
+        self.depth_raw_img = np.array(self.desired_shape, dtype=np.uint8)
+        self.depth_raw_img = cv2.resize(temp_img, tuple(reversed(self.desired_shape)), interpolation=cv2.INTER_NEAREST)
+        self.depth_raw_img = cv2.convertScaleAbs(self.depth_raw_img, alpha=(255.0/np.amax(self.depth_raw_img)))
+        self.depth_img = self.depth_raw_img
 
     def update_world_callback(self):
+        detected_objects_length = len(self.detected_objects)
         # For every new object that was found, first check whether it exists and then send it to the tf2_broadcaster.
-        for newdet_object in self.newly_detected_objects:
-            same_flag = 0  # indicates if the newly found object is the same with the one is being compared with.
-            for olddet_object in self.detected_objects:
-                if olddet_object.is_the_same_object(newdet_object):
-                    same_flag = 1
-                    # break
-                if same_flag == 1:
-                    continue
-                else:
-                    self.detected_objects.append(newdet_object)
-                    msg = Detected_object()
-                    msg.nameid = newdet_object.name_id
-                    msg.x = newdet_object.x
-                    msg.y = newdet_object.y
-                    msg.z = newdet_object.z
-                    msg.width = newdet_object.width
-                    msg.height = newdet_object.height
-                    self.obje_pub.publish(msg)
+        for new_det_object in self.newly_detected_objects:
+            # First time with no already found objects.
+            if detected_objects_length == 0:
+                self.save_and_send(new_det_object)
+                continue
+            for i in range(0,detected_objects_length):
+                if new_det_object.is_the_same_object(self.detected_objects[i]):
+                    break
+                if i == detected_objects_length - 1:
+                    self.save_and_send(new_det_object)
         # Empty the list newly_detected_objects
         del self.newly_detected_objects[:]
+        print("Objects so far found: " + str(len(self.detected_objects)))
+
+    # Saves the newly found object in the list of detected objects and sends it to tf2_broadcaster node.
+    def save_and_send(self, object):
+        self.detected_objects.append(object)
+        msg = Detected_object()
+        msg.nameid = object.name_id
+        msg.x = object.x
+        msg.y = object.y
+        msg.z = object.z
+        msg.width = object.width
+        msg.height = object.height
+        self.object_pub.publish(msg)
 
     def process(self):
         bounding_boxes = gui_editor.gui_editor(self.rgb_img, self.depth_img)
@@ -244,7 +237,6 @@ class ImageCapturer:
             # Get the point from point cloud of the corresponding pixel.
             # Multiply by the desired factor the pixel's position, because I have scaled the images by this number.
             coords = return_pcl(center_x * self.desired_divide_factor, center_y * self.desired_divide_factor, self.pcl)
-            print(coords)
             # Based on formula: x3D = (x * 2 - self.cx_d) * z3D/self.fx_d
             # Based on formula: y3D = (y * 2 - self.cy_d) * z3D/self.fy_d
             real_width = self.desired_divide_factor * w * coords[2] / self.fx_d
@@ -252,7 +244,7 @@ class ImageCapturer:
 
             # TODO take into mind that there going to be some gaps in the objects
             # a fix would be to take the median value of the bounding box
-            # self.depthrawimg[y][x] * 0.001 = coords[2]
+            # self.depth_raw_img[y][x] * 0.001 = coords[2]
 
             # Crop the image and get just the bounding box.
             crop_rgb_img = self.rgb_img[y:y + h, x:x + w]

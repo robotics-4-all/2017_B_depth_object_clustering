@@ -7,7 +7,7 @@ clustering:
   depth_weight        : 0.04
   coordinates_weight  : 0
   number_of_clusters  : 3
-  depth_thresup       : 30
+  depth_thresup       : 40
   depth_thresdown     : 0
   coldict : {
     0: [230, 25, 75],
