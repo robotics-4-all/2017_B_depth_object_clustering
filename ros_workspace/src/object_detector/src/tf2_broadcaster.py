@@ -26,7 +26,7 @@ class TFBroadcaster:
             # It is the same Header of the messages of pointcloud.
             t.header.frame_id = "camera_rgb_optical_frame"
             t.header.stamp = rospy.Time.now()
-            t.child_frame_id = "Object" + str(obj.nameid)
+            t.child_frame_id = "Object" + str(obj.name_id)
             t.transform.translation.x = obj.x
             t.transform.translation.y = obj.y
             t.transform.translation.z = obj.z

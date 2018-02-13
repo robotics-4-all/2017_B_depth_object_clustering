@@ -20,7 +20,10 @@ def print_cielab_without_opencv(color):
     print(l, a, b)
 
 
+# Returns the point in PointCloud regarding to the pixel in image.
 def return_pcl(x_img, y_img, pcl):
+    # TODO there is an error with objects, which have gaps.
+    # Solution maybe to find the median of the bounding box.
     if (y_img >= pcl.height) or (x_img >= pcl.width):
         return -1
     data_out = list(pc2.read_points(pcl, field_names=("x", "y", "z"), skip_nans=True, uvs=[[x_img, y_img]]))
@@ -49,7 +52,7 @@ class DetectedObject:
             image = cv2.cvtColor(crop_rgb_img, cv2.COLOR_BGR2LAB)
             image_array = image.reshape(height_img * width_img, channels)
             num_dom_colors = 2
-            k_means = KMeans(n_clusters=num_dom_colors, n_jobs=-1, init='random').fit(image_array)
+            k_means = KMeans(n_clusters=num_dom_colors, init='random').fit(image_array)
             # Grab the number of different clusters & create a histogram based on the number of pixels
             # assigned to each cluster. After that, find the cluster with most pixels - that will be the dominant color
             num_labels = np.arange(0, len(np.unique(k_means.labels_)) + 1)
@@ -80,7 +83,7 @@ class DetectedObject:
         # Use norm_function to get the probability to be the same object
         dist_prob = 1 - self.norm_function(other_object.x, other_object.y, other_object.z)
         print([norm_dist_color, norm_dist_width, norm_dist_height, dist_prob])
-        weights = [5, 1, 1, 10]
+        weights = [10, 1, 1, 10]
         norm_distances = [norm_dist_color, norm_dist_width, norm_dist_width, dist_prob]
         dist_final = np.inner(norm_distances, weights)
         norm_dist_final = dist_final / sum(weights)
@@ -111,7 +114,7 @@ class DetectedObject:
         if self.length != 0:
             fz = np.exp(-((z_inp - self.z) ** 2) / (2 * (self.length ** 2)))
         else:
-            fz = 1
+            fz = 1 - (abs(self.z - z_inp)/max(self.z, z_inp))
         return fx * fy * fz
 
 
