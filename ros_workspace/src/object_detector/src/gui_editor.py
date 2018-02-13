@@ -24,7 +24,7 @@ def gui_editor(rgb_img, depth_img):
 
             # Create track bars for parameters of clusterer
             cv2.createTrackbar('Clusters', 'image', 2, 21, nothing)
-            cv2.createTrackbar('Depth Weight1', 'image', 0, 9, nothing)  # no float permitted
+            cv2.createTrackbar('Depth Weight1', 'image', 0, 20, nothing)  # no float permitted
             cv2.createTrackbar('Depth Weight2', 'image', 0, 16, nothing)  # no float permitted
             # ~ cv2.createTrackbar('Coord Weight','image',0,1,nothing)
             cv2.createTrackbar('Depth ThreshUp', 'image', 0, 255, nothing)

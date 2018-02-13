@@ -92,7 +92,7 @@ def clusterer(img_rgb, img_depth, n_clusters, depth_weight, coord_weight, depth_
 
     # Normalize the features
     feature_vector_array = normalize(feature_vector_array, norm='max', axis=0)
-    feature_vector_array[:, -1] = feature_vector_array[:, -1] * coord_weight
+    feature_vector_array[:, -1] = feature_vector_array[:, -1] * depth_weight
 
     start_time = time.time()
     # TODO check other methods of clustering
