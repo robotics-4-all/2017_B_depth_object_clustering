@@ -47,8 +47,7 @@ class DetectedObject:
         if crop_rgb_img is not None:
             # Find the two dominants colors of the detected object using k-means with two clusters.
             height_img, width_img, channels = crop_rgb_img.shape
-            # Convert Image from BGR to RGB for better visualization.
-            # image = cv2.cvtColor(crop_rgb_img, cv2.COLOR_BGR2RGB)
+            # Convert Image from BGR to Cie-Lab to compute color distance.
             image = cv2.cvtColor(crop_rgb_img, cv2.COLOR_BGR2LAB)
             image_array = image.reshape(height_img * width_img, channels)
             num_dom_colors = 2

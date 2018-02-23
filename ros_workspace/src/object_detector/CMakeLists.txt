@@ -8,6 +8,7 @@ project(object_detector)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(OpenCV REQUIRED)
+find_package(PCL 1.3 REQUIRED COMPONENTS common io)
 find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   cv_bridge
@@ -121,7 +122,12 @@ catkin_package(
 include_directories(
 # include
   ${catkin_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIRS}
 )
+
+link_directories(${PCL_LIBRARY_DIRS})
+add_definitions(${PCL_DEFINITIONS})
+
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
@@ -136,7 +142,7 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-# add_executable(${PROJECT_NAME}_node src/object_detector_node.cpp)
+add_executable(pcd_write_test src/pcd_write.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -149,9 +155,10 @@ include_directories(
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
-# target_link_libraries(${PROJECT_NAME}_node
+ target_link_libraries(
 #   ${catkin_LIBRARIES}
-# )
+pcd_write_test ${PCL_COMMON_LIBRARIES} ${PCL_IO_LIBRARIES}
+ )
 
 #############
 ## Install ##
