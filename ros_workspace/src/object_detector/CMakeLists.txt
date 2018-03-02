@@ -8,7 +8,7 @@ project(object_detector)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(OpenCV REQUIRED)
-find_package(PCL 1.3 REQUIRED COMPONENTS common io)
+find_package(PCL 1.7 REQUIRED)
 find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   cv_bridge
@@ -157,7 +157,7 @@ add_executable(pcd_write_test src/pcd_write.cpp)
 ## Specify libraries to link a library or executable target against
  target_link_libraries(
 #   ${catkin_LIBRARIES}
-pcd_write_test ${PCL_COMMON_LIBRARIES} ${PCL_IO_LIBRARIES}
+pcd_write_test ${PCL_LIBRARIES}
  )
 
 #############
