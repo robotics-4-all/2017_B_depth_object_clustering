@@ -8,6 +8,8 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/visualization/cloud_viewer.h>
 #include <fstream>
+#include <string>
+
 
 int find_a_name_later(std::string object_name, std::string id1, std::string id2, std::string id3, ofstream &write_file){
 
@@ -18,9 +20,8 @@ int find_a_name_later(std::string object_name, std::string id1, std::string id2,
     pcl::PCDReader reader;
     if (reader.read (file_location, *init_cloud) == -1){
         PCL_ERROR ("Couldn't read file \n");
-        return (-1);
+        return -1;
     }
-
 
     /////////////////// Apply Voxel Grid Filtering //////////////////////////
     pcl::PCLPointCloud2::Ptr cloud_filtered (new pcl::PCLPointCloud2 ());
@@ -37,7 +38,6 @@ int find_a_name_later(std::string object_name, std::string id1, std::string id2,
        << " data points (" << pcl::getFieldsList (*cloud_filtered) << "). \n";
 
     pcl::fromPCLPointCloud2(*cloud_filtered, *cloud);
-
 
     ///////////////////////////// Estimate the normals //////////////////////////////////////////////
     // Create the normal estimation class, and pass the input dataset to it
@@ -77,7 +77,7 @@ int find_a_name_later(std::string object_name, std::string id1, std::string id2,
     // Create an empty kdtree representation, and pass it to the PFH estimation object.
     // Its content will be filled inside the object, based on the given input dataset (as no other search surface is given).
     // TODO check if you need a new one
-    pfh.setSearchMethod (kdtree);
+    pfh.setSearchMethod(kdtree);
 
     // Output datasets
     pcl::PointCloud<pcl::PFHSignature125>::Ptr pfhs(new pcl::PointCloud<pcl::PFHSignature125>());
@@ -89,7 +89,7 @@ int find_a_name_later(std::string object_name, std::string id1, std::string id2,
     pfh.setRadiusSearch (100);
 
     // Compute the features
-    pfh.compute (*pfhs);
+    pfh.compute(*pfhs);
 
     // Find the centroid of the object and all its neighbors within radius search
     // Source: http://pointclouds.org/documentation/tutorials/kdtree_search.php#kdtree-search
@@ -127,6 +127,18 @@ int find_a_name_later(std::string object_name, std::string id1, std::string id2,
         write_file << "0\n";
     else if(object_name == "apple")
         write_file << "1\n";
+    else if(object_name == "camera")
+        write_file << "2\n";
+    else if(object_name == "cell_phone")
+        write_file << "3\n";
+    else if(object_name == "coffee_mug")
+        write_file << "4\n";
+    else if(object_name == "garlic")
+        write_file << "5\n";
+    else if(object_name == "bowl")
+        write_file << "6\n";
+    else if(object_name == "calculator")
+        write_file << "7\n";
     return 1;
 }
 
@@ -144,8 +156,29 @@ int main (int argc, char** argv)
         csv_file << "Feature" << i << ",";
     }
     csv_file << "Id\n";
-    int ret = find_a_name_later("cap", "1", "1", "110", csv_file);
-    ret = find_a_name_later("apple", "1", "1", "110", csv_file);
+    std::ostringstream convert;   // stream used for the conversion
+
+	// Create a initializer list of strings
+	// Initialize String Array
+    std::string objects[8] = {"apple", "cap", "camera", "cell_phone", "coffee_mug", "garlic", "bowl", "calculator"};
+	// Create & Initialize a list with initializer_list object
+    for(int object_id = 0; object_id < 8; object_id++){
+        for(int i = 1; i < 2; i++){
+            for (int j = 1; j < 50; j++){
+                convert << i;
+                std::string i_string = convert.str();
+                convert.str("");
+                convert.clear();
+                convert << j;
+                std::string j_string = convert.str();
+                convert.str("");
+                convert.clear();
+                find_a_name_later(objects[object_id], "1", i_string, j_string, csv_file);
+            }
+        }
+    }
+//    find_a_name_later("cap", "1", "1", "110", csv_file);
+//    find_a_name_later("apple", "1", "1", "110", csv_file);
     csv_file.close();
-    return ret;
+    return 0;
 }
