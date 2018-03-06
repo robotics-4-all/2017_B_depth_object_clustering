@@ -11,7 +11,8 @@
 #include <string>
 
 
-int find_a_name_later(std::string object_name, std::string id1, std::string id2, std::string id3, ofstream &write_file){
+int find_a_name_later(std::string object_name, std::string id1, std::string id2, std::string id3, ofstream &write_file,
+    int object_id){
 
     std::string file_location = "Database/PCL_dataset/" + object_name + "_" + id1 + "/" + object_name + "_" + id1 + "_" + id2 + "_" + id3 + ".pcd";
     std::cout << "Doing stuff for object at location: " << file_location << endl;
@@ -71,46 +72,30 @@ int find_a_name_later(std::string object_name, std::string id1, std::string id2,
 
     //////////// Create the PFH estimation class, and pass the input dataset+normals to it /////////////////
     pcl::PFHEstimation<pcl::PointXYZ, pcl::Normal, pcl::PFHSignature125> pfh;
-    pfh.setInputCloud(cloud);
-    pfh.setInputNormals(cloud_normals);
 
     // Create an empty kdtree representation, and pass it to the PFH estimation object.
     // Its content will be filled inside the object, based on the given input dataset (as no other search surface is given).
     // TODO check if you need a new one
-    pfh.setSearchMethod(kdtree);
-
-    // Output datasets
-    pcl::PointCloud<pcl::PFHSignature125>::Ptr pfhs(new pcl::PointCloud<pcl::PFHSignature125>());
-    // TODO Better to use for only one point - the center of the object. - computePointPFHSignature
-
-    // Use all neighbors in a sphere of radius 5cm
-    // IMPORTANT: the radius used here has to be larger than the radius used to estimate the surface normals!!!
-    // New by me: make the radius really big to cover the whole object. TODO just take only one point
-    pfh.setRadiusSearch (100);
-
-    // Compute the features
-    pfh.compute(*pfhs);
+//    pfh.setSearchMethod(kdtree);
 
     // Find the centroid of the object and all its neighbors within radius search
     // Source: http://pointclouds.org/documentation/tutorials/kdtree_search.php#kdtree-search
 //    pcl::KdTreeFLANN<pcl::PointXYZ> kdtree2;
 //    Eigen::Vector4f centroid;
 //    pcl::compute3DCentroid(*cloud, centroid);
-    std::cout << "Point Feature Histograms are ready." << endl;
 //    pcl::PointXYZ searchPoint(centroid[0], centroid[1], centroid[2]);
 
-//    Eigen::VectorXf pfh_histogram;
-//    std::vector<int> indices(cloud_filtered->width * cloud_filtered->height);
-//    for (int i = 0; i < cloud_filtered->width * cloud_filtered->height; i++){
-//        indices[i] = i;
-//    }
-//    pfh.computePointPFHSignature(cloud, cloud_normals, &indices, 5, &pfh_histogram);
+    int n_sub_div = 5;
+    Eigen::VectorXf pfh_histogram(n_sub_div * n_sub_div * n_sub_div);
+    int size_of_indices = cloud_filtered->width * cloud_filtered->height;
+    std::vector<int> indices;
+    for (int i = 0; i < size_of_indices; i++){
+        indices.push_back(i);
+    }
+    pfh.computePointPFHSignature(*cloud, *cloud_normals, indices, n_sub_div, pfh_histogram);
+    std::cout << "Point Feature Histograms are ready." << endl;
 
     /////////////////////////////////// Visualisation ////////////////////////
-    // Visualize the pfh
-//    pcl::visualization::PCLHistogramVisualizer hist_visualizer;
-//    hist_visualizer.addFeatureHistogram(*pfhs, 125);
-
     // Visualize the Filtered PointCloud
 //    pcl::visualization::CloudViewer viewer ("Simple Cloud Viewer");
 //    viewer.showCloud(cloud);
@@ -120,25 +105,10 @@ int find_a_name_later(std::string object_name, std::string id1, std::string id2,
     // Write the data in a csv file.
     write_file << object_name + "_" + id1 + "_" + id2 + "_" + id3 << ",";
     for(int i = 0; i < 125; i++){
-        write_file << pfhs->points[0].histogram[i] << ",";
+//        write_file << pfhs->points[0].histogram[i] << ",";
+        write_file << pfh_histogram[i] << ",";
     }
-    // TODO make it with enum, in order to be more elegant.
-    if(object_name == "cap")
-        write_file << "0\n";
-    else if(object_name == "apple")
-        write_file << "1\n";
-    else if(object_name == "camera")
-        write_file << "2\n";
-    else if(object_name == "cell_phone")
-        write_file << "3\n";
-    else if(object_name == "coffee_mug")
-        write_file << "4\n";
-    else if(object_name == "garlic")
-        write_file << "5\n";
-    else if(object_name == "bowl")
-        write_file << "6\n";
-    else if(object_name == "calculator")
-        write_file << "7\n";
+    write_file << object_id << "\n";
     return 1;
 }
 
@@ -160,25 +130,33 @@ int main (int argc, char** argv)
 
 	// Create a initializer list of strings
 	// Initialize String Array
-    std::string objects[8] = {"apple", "cap", "camera", "cell_phone", "coffee_mug", "garlic", "bowl", "calculator"};
+	int num_objects = 12;
+    std::string objects[num_objects] = {"apple", "cap", "camera", "cell_phone", "coffee_mug", "garlic",
+        "bowl", "calculator", "ball", "banana", "food_can", "food_bag"};
 	// Create & Initialize a list with initializer_list object
-    for(int object_id = 0; object_id < 8; object_id++){
-        for(int i = 1; i < 2; i++){
-            for (int j = 1; j < 50; j++){
+    for(int object_id = 0; object_id < num_objects; object_id++){
+        for(int k = 1; k < 3; k++){
+            convert << k;
+            std::string k_string = convert.str();
+            convert.str("");
+            convert.clear();
+            for(int i = 1; i < 3; i++){
                 convert << i;
                 std::string i_string = convert.str();
                 convert.str("");
                 convert.clear();
-                convert << j;
-                std::string j_string = convert.str();
-                convert.str("");
-                convert.clear();
-                find_a_name_later(objects[object_id], "1", i_string, j_string, csv_file);
+                for (int j = 1; j < 150; j++){
+                    convert << j;
+                    std::string j_string = convert.str();
+                    convert.str("");
+                    convert.clear();
+                    find_a_name_later(objects[object_id], k_string, i_string, j_string, csv_file, object_id);
+                }
             }
         }
     }
 //    find_a_name_later("cap", "1", "1", "110", csv_file);
-//    find_a_name_later("apple", "1", "1", "110", csv_file);
+//    find_a_name_later("apple", "1", "1", "1", csv_file);
     csv_file.close();
     return 0;
 }
