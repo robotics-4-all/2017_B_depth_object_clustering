@@ -13,6 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   cv_bridge
   rospy
+  roscpp
   std_msgs
   message_generation
 )
@@ -58,11 +59,10 @@ find_package(catkin REQUIRED COMPONENTS
  )
 
 ## Generate services in the 'srv' folder
-# add_service_files(
-#   FILES
-#   Service1.srv
-#   Service2.srv
-# )
+ add_service_files(
+   FILES
+   Box.srv
+ )
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -75,6 +75,7 @@ find_package(catkin REQUIRED COMPONENTS
  generate_messages(
    DEPENDENCIES
    std_msgs
+   sensor_msgs
  )
 
 ################################################
@@ -143,6 +144,7 @@ add_definitions(${PCL_DEFINITIONS})
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(pcd_write_test src/pcd_write.cpp)
+add_executable(pointcloud_cropper src/pointcloud_cropper.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -155,10 +157,10 @@ add_executable(pcd_write_test src/pcd_write.cpp)
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
- target_link_libraries(
-#   ${catkin_LIBRARIES}
-pcd_write_test ${PCL_LIBRARIES}
- )
+ target_link_libraries(pcd_write_test ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+ target_link_libraries(pointcloud_cropper ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+ add_dependencies(pointcloud_cropper object_detector_gencpp)
+
 
 #############
 ## Install ##

@@ -9,6 +9,7 @@ from sensor_msgs.msg import Image, PointCloud2, CameraInfo
 import sensor_msgs.point_cloud2 as pc2
 
 from object_detector.msg import Detected_object
+from object_detector.srv import Box
 from cv_bridge import CvBridge, CvBridgeError
 import gui_editor
 
@@ -32,18 +33,20 @@ def return_pcl(x_img, y_img, pcl):
 
 
 class DetectedObject:
-    def __init__(self, name_id, x, y, z, width, height, crop_rgb_img=None, crop_depth_img=None):
+    def __init__(self, name_id, x, y, z, width, height, crop_rgb_img=None, crop_depth_img=None, pointcloud=None):
         self.name_id = name_id
         self.x = x
         self.y = y
         self.z = z
         self.width = width  # real dimension of object in x-axis
         self.height = height  # real dimension of object in y-axis
-        self.length = 0 # real dimension of object in z-axis
+        self.length = 0  # real dimension of object in z-axis
         self.mu = (x, y, z)
         self.crop_rgb_img = crop_rgb_img
         self.crop_depth_img = crop_depth_img
-
+        self.object_pointcloud = pointcloud  # TODO
+        self.pfh = []
+        self.crop_pointcloud_client()
         if crop_rgb_img is not None:
             # Find the two dominants colors of the detected object using k-means with two clusters.
             height_img, width_img, channels = crop_rgb_img.shape
@@ -53,7 +56,7 @@ class DetectedObject:
             num_dom_colors = 2
             k_means = KMeans(n_clusters=num_dom_colors, init='random').fit(image_array)
             # Grab the number of different clusters & create a histogram based on the number of pixels
-            # assigned to each cluster. After that, find the cluster with most pixels - that will be the dominant color
+            # assigned to each cluster. After that, find the cluster with most pixels - that will be the dominant color.
             num_labels = np.arange(0, len(np.unique(k_means.labels_)) + 1)
             (hist, _) = np.histogram(k_means.labels_, bins=num_labels)
             self.dom_colors = k_means.cluster_centers_[np.argmax(hist)].astype(np.uint8)
@@ -115,6 +118,18 @@ class DetectedObject:
         else:
             fz = 1 - (abs(self.z - z_inp)/max(self.z, z_inp))
         return fx * fy * fz
+
+    def crop_pointcloud_client(self):
+        rospy.wait_for_service('crop_pointcloud')
+        try:
+            print("Service called\n")
+            crop_pointcloud = rospy.ServiceProxy('crop_pointcloud', Box)
+            self.object_pointcloud = crop_pointcloud(self.x, self.y, self.z, self.width,
+                                                     self.height, self.whole_pointcloud,
+                                                     self.pcl) # TODO replace z with median z?
+            return 0  # TODO
+        except rospy.ServiceException, e:
+            print("Service call failed: " + e + "\n")
 
 
 class ImageCapturer:
@@ -253,7 +268,7 @@ class ImageCapturer:
             crop_depth_img = self.depth_img[y:y + h, x:x + w]
 
             det_object = DetectedObject(counter, coords[0], coords[1], coords[2], real_width, real_height, crop_rgb_img,
-                                        crop_depth_img)
+                                        crop_depth_img, self.pcl)
             self.newly_detected_objects.append(det_object)
             counter += 1
         self.update_world_callback()
