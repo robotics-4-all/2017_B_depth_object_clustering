@@ -4,6 +4,7 @@ import rospy
 import cv2
 import yaml
 import numpy as np
+
 from sklearn.cluster import KMeans
 from sensor_msgs.msg import Image, PointCloud2, CameraInfo
 import sensor_msgs.point_cloud2 as pc2
@@ -44,9 +45,9 @@ class DetectedObject:
         self.mu = (x, y, z)
         self.crop_rgb_img = crop_rgb_img
         self.crop_depth_img = crop_depth_img
-        self.object_pointcloud = pointcloud  # TODO
+        self.whole_pointcloud = pointcloud
+        self.object_pointcloud = self.crop_pointcloud_client()
         self.pfh = []
-        self.crop_pointcloud_client()
         if crop_rgb_img is not None:
             # Find the two dominants colors of the detected object using k-means with two clusters.
             height_img, width_img, channels = crop_rgb_img.shape
@@ -124,12 +125,11 @@ class DetectedObject:
         try:
             print("Service called\n")
             crop_pointcloud = rospy.ServiceProxy('crop_pointcloud', Box)
-            self.object_pointcloud = crop_pointcloud(self.x, self.y, self.z, self.width,
-                                                     self.height, self.whole_pointcloud,
-                                                     self.pcl) # TODO replace z with median z?
-            return 0  # TODO
-        except rospy.ServiceException, e:
-            print("Service call failed: " + e + "\n")
+            object_pointcloud = crop_pointcloud(self.x, self.y, self.z, self.width,
+                                                self.height, self.whole_pointcloud)  # TODO replace z with median z?
+            return object_pointcloud
+        except rospy.ServiceException as e:
+            print("Service call failed: " + str(e) + "\n")
 
 
 class ImageCapturer:
@@ -260,7 +260,7 @@ class ImageCapturer:
             real_height = self.desired_divide_factor * h * coords[2] / self.fy_d
 
             # TODO take into mind that there going to be some gaps in the objects
-            # a fix would be to take the median value of the bounding box
+            # TODO a fix would be to take the median value of the bounding box
             # self.depth_raw_img[y][x] * 0.001 = coords[2]
 
             # Crop the image and get just the bounding box.
