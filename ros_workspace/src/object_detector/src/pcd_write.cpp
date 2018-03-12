@@ -1,31 +1,9 @@
-#include <iostream>
-#include <pcl/io/pcd_io.h>
-#include <pcl/point_types.h>
-#include <pcl/features/normal_3d.h>
-#include <pcl/features/pfh.h>
-#include <pcl/visualization/histogram_visualizer.h>
-#include <pcl/filters/voxel_grid.h>
-#include <pcl_conversions/pcl_conversions.h>
-#include <pcl/visualization/cloud_viewer.h>
-#include <fstream>
-#include <string>
+#include "../include/object_detector/pcd_write.hpp"
 
 
-int find_a_name_later(std::string object_name, std::string id1, std::string id2, std::string id3, ofstream &write_file,
-    int object_id){
-
-    std::string file_location = "Database/PCL_dataset/" + object_name + "_" + id1 + "/" + object_name + "_" + id1 + "_" + id2 + "_" + id3 + ".pcd";
-    std::cout << "Doing stuff for object at location: " << file_location << endl;
-    pcl::PCLPointCloud2::Ptr init_cloud(new pcl::PCLPointCloud2 ());
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::PCDReader reader;
-    if (reader.read (file_location, *init_cloud) == -1){
-        PCL_ERROR ("Couldn't read file \n");
-        return -1;
-    }
-
+Eigen::VectorXf pfh_function(pcl::PCLPointCloud2::Ptr init_cloud){
     /////////////////// Apply Voxel Grid Filtering //////////////////////////
-    pcl::PCLPointCloud2::Ptr cloud_filtered (new pcl::PCLPointCloud2 ());
+    pcl::PCLPointCloud2::Ptr cloud_filtered(new pcl::PCLPointCloud2 ());
     std::cout << "PointCloud before filtering: " << init_cloud->width * init_cloud->height
        << " data points (" << pcl::getFieldsList (*init_cloud) << "). \n";
 
@@ -37,7 +15,7 @@ int find_a_name_later(std::string object_name, std::string id1, std::string id2,
 
     std::cout << "PointCloud after filtering: " << cloud_filtered->width * cloud_filtered->height
        << " data points (" << pcl::getFieldsList (*cloud_filtered) << "). \n";
-
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::fromPCLPointCloud2(*cloud_filtered, *cloud);
 
     ///////////////////////////// Estimate the normals //////////////////////////////////////////////
@@ -102,61 +80,87 @@ int find_a_name_later(std::string object_name, std::string id1, std::string id2,
 //    while (!viewer.wasStopped ())
 //    {
 //    }
+    return pfh_histogram;
+}
+
+int pfh_estimator(std::string object_name, std::string id1, std::string id2, std::string id3, ofstream &write_file,
+    int object_id){
+
+    std::string file_location = "Database/PCL_dataset/" + object_name + "_" + id1 + "/" + object_name + "_" + id1 + "_" + id2 + "_" + id3 + ".pcd";
+    std::cout << "Doing stuff for object at location: " << file_location << endl;
+    pcl::PCLPointCloud2::Ptr init_cloud(new pcl::PCLPointCloud2 ());
+    pcl::PCDReader reader;
+    if (reader.read (file_location, *init_cloud) == -1){
+        PCL_ERROR ("Couldn't read file \n");
+        return -1;
+    }
+
+    Eigen::VectorXf pfh_histogram;
+    pfh_histogram = pfh_function(init_cloud);
+
     // Write the data in a csv file.
     write_file << object_name + "_" + id1 + "_" + id2 + "_" + id3 << ",";
     for(int i = 0; i < 125; i++){
-//        write_file << pfhs->points[0].histogram[i] << ",";
         write_file << pfh_histogram[i] << ",";
     }
     write_file << object_id << "\n";
     return 1;
 }
 
+int pfh_estimator(pcl::PointCloud<pcl::PointXYZ> input_cloud){
+    Eigen::VectorXf pfh_histogram;
+    pcl::PCLPointCloud2::Ptr point_cloud2(new pcl::PCLPointCloud2());
 
-int main (int argc, char** argv)
-{
-    ofstream csv_file;
-    csv_file.open ("Database/pfh.csv");
-    if (csv_file.fail()){
-        std::cout << "Couldn't open the csv file!";
-        return -1;
-    }
-    csv_file << "Name,";
-    for(int i = 1; i < 126; i++){
-        csv_file << "Feature" << i << ",";
-    }
-    csv_file << "Id\n";
-    std::ostringstream convert;   // stream used for the conversion
+    pcl::toPCLPointCloud2(input_cloud, *point_cloud2);
+    pfh_histogram = pfh_function(point_cloud2);
 
-	// Create a initializer list of strings
-	// Initialize String Array
-	int num_objects = 12;
-    std::string objects[num_objects] = {"apple", "cap", "camera", "cell_phone", "coffee_mug", "garlic",
-        "bowl", "calculator", "ball", "banana", "food_can", "food_bag"};
-	// Create & Initialize a list with initializer_list object
-    for(int object_id = 0; object_id < num_objects; object_id++){
-        for(int k = 1; k < 3; k++){
-            convert << k;
-            std::string k_string = convert.str();
-            convert.str("");
-            convert.clear();
-            for(int i = 1; i < 3; i++){
-                convert << i;
-                std::string i_string = convert.str();
-                convert.str("");
-                convert.clear();
-                for (int j = 1; j < 150; j++){
-                    convert << j;
-                    std::string j_string = convert.str();
-                    convert.str("");
-                    convert.clear();
-                    find_a_name_later(objects[object_id], k_string, i_string, j_string, csv_file, object_id);
-                }
-            }
-        }
-    }
-//    find_a_name_later("cap", "1", "1", "110", csv_file);
-//    find_a_name_later("apple", "1", "1", "1", csv_file);
-    csv_file.close();
     return 0;
 }
+
+//int main (int argc, char** argv)
+//{
+//    ofstream csv_file;
+//    csv_file.open ("Database/pfh.csv");
+//    if (csv_file.fail()){
+//        std::cout << "Couldn't open the csv file!";
+//        return -1;
+//    }
+//    csv_file << "Name,";
+//    for(int i = 1; i < 126; i++){
+//        csv_file << "Feature" << i << ",";
+//    }
+//    csv_file << "Id\n";
+//    std::ostringstream convert;   // stream used for the conversion
+//
+//	// Create a initializer list of strings
+//	// Initialize String Array
+//	int num_objects = 12;
+//    std::string objects[num_objects] = {"apple", "cap", "camera", "cell_phone", "coffee_mug", "garlic",
+//        "bowl", "calculator", "ball", "banana", "food_can", "food_bag"};
+//	// Create & Initialize a list with initializer_list object
+//    for(int object_id = 0; object_id < num_objects; object_id++){
+//        for(int k = 1; k < 3; k++){
+//            convert << k;
+//            std::string k_string = convert.str();
+//            convert.str("");
+//            convert.clear();
+//            for(int i = 1; i < 5; i++){
+//                convert << i;
+//                std::string i_string = convert.str();
+//                convert.str("");
+//                convert.clear();
+//                for (int j = 1; j < 151; j++){
+//                    convert << j;
+//                    std::string j_string = convert.str();
+//                    convert.str("");
+//                    convert.clear();
+//                    pfh_estimator(objects[object_id], k_string, i_string, j_string, csv_file, object_id);
+//                }
+//            }
+//        }
+//    }
+////    pfh_estimator("cap", "1", "1", "110", csv_file);
+////    pfh_estimator("apple", "1", "1", "1", csv_file);
+//    csv_file.close();
+//    return 0;
+//}
