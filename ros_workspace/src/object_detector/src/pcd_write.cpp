@@ -94,12 +94,12 @@ int pfh_estimator(std::string object_name, std::string id1, std::string id2, std
     return 1;
 }
 
-int pfh_estimator(pcl::PointCloud<pcl::PointXYZ> input_cloud){
+Eigen::VectorXf pfh_estimator(pcl::PointCloud<pcl::PointXYZ> input_cloud){
     Eigen::VectorXf pfh_histogram;
     pcl::PCLPointCloud2::Ptr point_cloud2(new pcl::PCLPointCloud2());
 
     pcl::toPCLPointCloud2(input_cloud, *point_cloud2);
     pfh_histogram = pfh_function(point_cloud2);
 
-    return 0;
+    return pfh_histogram;
 }

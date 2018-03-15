@@ -1,0 +1,11 @@
+<launch>
+
+  <include file="$(find openni_launch)/launch/openni.launch">
+    <arg name="depth_registration" value="true" />
+    <arg name="load_driver" value="false" />
+  </include>
+  
+  <node name="tf2_broadcaster" type="tf2_broadcaster.py" pkg="object_detector" output="screen"/>
+  <node name="pointcloud_cropper" type="pointcloud_cropper" pkg="object_detector" output="screen"/>
+  
+</launch>

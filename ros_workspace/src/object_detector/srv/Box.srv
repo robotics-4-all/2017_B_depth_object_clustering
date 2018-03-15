@@ -5,4 +5,4 @@ float32 width
 float32 height
 sensor_msgs/PointCloud2 whole_pointcloud
 ---
-sensor_msgs/PointCloud2 object_pointcloud
+float32[125] pfh

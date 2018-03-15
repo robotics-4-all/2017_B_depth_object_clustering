@@ -6,7 +6,6 @@
 #include "pcl/point_types.h"
 #include "pcl/PCLPointCloud2.h"
 #include "pcl/conversions.h"
-#include "pcl/visualization/cloud_viewer.h"  //TODO remove me
 
 #include "object_detector/Box.h"
 #include "../include/object_detector/pcd_write.hpp"
@@ -35,8 +34,14 @@ bool crop_pointcloud(object_detector::Box::Request &req, object_detector::Box::R
 //    }
 
     // Convert from pcl::PointCloud<pcl::PointXYZ> to sensor_msgs/PointCloud2 and send the response back to client.
-    pcl::toROSMsg(*cloudOut, res.object_pointcloud);
-    pfh_estimator(*cloudOut);
+//    pcl::toROSMsg(*cloudOut, res.object_pointcloud);
+//    std::cout << "My stuff is " << pfh_estimator(*cloudOut) << std::endl;
+    Eigen::VectorXf temp_vector = pfh_estimator(*cloudOut);
+    for (int i = 0; i<125; i++){
+        res.pfh[i] = temp_vector[i];
+//        std::cout << temp_vector << std::endl;
+    }
+
     return true;
 }
 

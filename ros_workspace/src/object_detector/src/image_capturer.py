@@ -43,11 +43,11 @@ class DetectedObject:
         self.height = height  # real dimension of object in y-axis
         self.length = 0  # real dimension of object in z-axis
         self.mu = (x, y, z)
-        self.crop_rgb_img = crop_rgb_img
-        self.crop_depth_img = crop_depth_img
+        self.crop_rgb_img = crop_rgb_img  # TODO make it array in order to have better visualizations of diff frames.
+        self.crop_depth_img = crop_depth_img  # TODO make it array in order to have better visualizations of diff frames
         self.whole_pointcloud = pointcloud
-        self.object_pointcloud = self.crop_pointcloud_client()
-        self.pfh = []
+        self.pfh = []  # list of pfhs of the object
+        self.pfh.append(self.crop_pointcloud_client())
         if crop_rgb_img is not None:
             # Find the two dominants colors of the detected object using k-means with two clusters.
             height_img, width_img, channels = crop_rgb_img.shape
@@ -96,21 +96,29 @@ class DetectedObject:
 
         if norm_prob_final > 0.8:
             # It is the same object - so you have to update the dimensions  of it.
-            # TODO maybe update the center as well.
             self.update_dimensions(other_object)
+            # Save another pfh of the current frame of the same object.
+            self.pfh.append(other_object.crop_pointcloud_client())
             return True
         else:
             return False
 
     def update_dimensions(self, newly_observed_object):
         # Update the width, height and length according to the new "frame" of the object.
-        self.width = max(self.width, newly_observed_object.width)
-        self.height = max(self.height, newly_observed_object.height)
+        # Average the two curves of normal distributions
+        # Credits: https://stats.stackexchange.com/questions/41279/how-can-i-combine-two-normal-distributions-functions
+        self.width = np.srt(self.width ^ 2 + newly_observed_object.width ^ 2) / 2
+        self.height = np.srt(self.height ^ 2 + newly_observed_object.height ^ 2) / 2
+        # TODO think about it again because with this you have to change width and height as well in a way.
+        # TODO maybe fuse two gaussians into one! numpy.convolve
+        self.x = (self.x + newly_observed_object.x) / 2
+        self.y = (self.x + newly_observed_object.y) / 2
         if self.length < abs(newly_observed_object.z - self.z):
             self.length = abs(newly_observed_object.z - self.z)
 
     def norm_function(self, x_inp, y_inp, z_inp):
         # Take formula of normal distribution and remove "/ np.sqrt(2 * np.pi * self.width**2)"
+        # sigma = width or height
         fx = np.exp(-((x_inp - self.x) ** 2) / (2 * (self.width ** 2)))
         fy = np.exp(-((y_inp - self.y) ** 2) / (2 * (self.height ** 2)))
         # If you have never noticed the object again, you have no information about the length in z-axis.
@@ -127,7 +135,7 @@ class DetectedObject:
             crop_pointcloud = rospy.ServiceProxy('crop_pointcloud', Box)
             object_pointcloud = crop_pointcloud(self.x, self.y, self.z, self.width,
                                                 self.height, self.whole_pointcloud)  # TODO replace z with median z?
-            return object_pointcloud
+            return object_pointcloud.pfh
         except rospy.ServiceException as e:
             print("Service call failed: " + str(e) + "\n")
 
@@ -175,6 +183,12 @@ class ImageCapturer:
                 self.depth_thresdown = doc["clustering"]["depth_thresdown"]
             except yaml.YAMLError as exc:
                 print(exc)
+        # self.depth_weight = rospy.get_param("depth_weight")
+        # self.coordinates_weight = rospy.get_param("coordinates_weight")
+        # self.nclusters = rospy.get_param("number_of_clusters")
+        # self.depth_thresup = rospy.get_param("depth_thresup")
+        # self.depth_thresdown = rospy.get_param("depth_thresdown")
+        # print(self.depth_weight)
 
     def camera_info_callback(self, msg_info):
         self.cx_d = msg_info.K[2]
@@ -221,8 +235,9 @@ class ImageCapturer:
             if detected_objects_length == 0:
                 self.save_and_send(new_det_object)
                 continue
-            for i in range(0,detected_objects_length):
-                if new_det_object.is_the_same_object(self.detected_objects[i]):
+            for i in range(0, detected_objects_length):
+                if self.detected_objects[i].is_the_same_object(new_det_object):
+                    # TODO add the new instance of pointclouds
                     break
                 if i == detected_objects_length - 1:
                     self.save_and_send(new_det_object)

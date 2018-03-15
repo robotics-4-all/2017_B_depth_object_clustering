@@ -103,9 +103,9 @@ add_definitions(${PCL_DEFINITIONS})
 
 
 ## Declare a C++ library
- add_library(${PROJECT_NAME}
-   src/pcd_write.cpp
- )
+# add_library(${PROJECT_NAME}
+#   src/pcd_write.cpp
+# )
 
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
