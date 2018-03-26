@@ -73,7 +73,8 @@ Eigen::VectorXf pfh_function(pcl::PCLPointCloud2::Ptr init_cloud){
 int pfh_estimator(std::string object_name, std::string id1, std::string id2, std::string id3, ofstream &write_file,
     int object_id){
 
-    std::string file_location = "Database/PCL_dataset/" + object_name + "_" + id1 + "/" + object_name + "_" + id1 + "_" + id2 + "_" + id3 + ".pcd";
+    std::string file_location = "Database/PCL_dataset/" + object_name + "/" + object_name + "_" + id1
+        + "/" + object_name + "_" + id1 + "_" + id2 + "_" + id3 + ".pcd";
     std::cout << "Doing stuff for object at location: " << file_location << endl;
     pcl::PCLPointCloud2::Ptr init_cloud(new pcl::PCLPointCloud2 ());
     pcl::PCDReader reader;
