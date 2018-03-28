@@ -36,13 +36,16 @@ def return_pcl(x_img, y_img, pcl):
 class DetectedObject:
     def __init__(self, name_id, x, y, z, width, height, crop_rgb_img=None, crop_depth_img=None, pointcloud=None):
         self.name_id = name_id
-        self.x = x
-        self.y = y
-        self.z = z
         self.width = width  # real dimension of object in x-axis
         self.height = height  # real dimension of object in y-axis
         self.length = 0  # real dimension of object in z-axis
-        self.mu = (x, y, z)
+
+        self.x = x  # center of the object
+        self.y = y  # center of the object
+        self.z = z  # center of the object
+        self.sigma_x = self.width / 6  # standard deviation in x-axis
+        self.sigma_y = self.height / 6  # standard deviation in y-axis
+
         self.crop_rgb_img = crop_rgb_img  # TODO make it array in order to have better visualizations of diff frames.
         self.crop_depth_img = crop_depth_img  # TODO make it array in order to have better visualizations of diff frames
         self.whole_pointcloud = pointcloud
@@ -105,10 +108,13 @@ class DetectedObject:
 
     def update_dimensions(self, newly_observed_object):
         # Update the width, height and length according to the new "frame" of the object.
+        # Treat real dimensions and sigmas in a different way.
+        self.width = (self.width + newly_observed_object.width) / 2
+        self.height = (self.height + newly_observed_object.height) / 2
         # Average the two curves of normal distributions
         # Credits: https://stats.stackexchange.com/questions/179213/mean-of-two-normal-distributions
-        self.width = np.sqrt(self.width ^ 2 + newly_observed_object.width ^ 2) / 2
-        self.height = np.sqrt(self.height ^ 2 + newly_observed_object.height ^ 2) / 2
+        self.sigma_x = np.sqrt(self.sigma_x ^ 2 + newly_observed_object.width ^ 2) / 2
+        self.sigma_y = np.sqrt(self.sigma_y ^ 2 + newly_observed_object.height ^ 2) / 2
         self.x = (self.x + newly_observed_object.x) / 2
         self.y = (self.y + newly_observed_object.y) / 2
         self.z = (self.z + newly_observed_object.z) / 2
@@ -116,30 +122,28 @@ class DetectedObject:
             self.length = abs(newly_observed_object.z - self.z)
 
     def norm_function(self, x_inp, y_inp, z_inp):
-        # fx = np.exp(-((x_inp - self.x) ** 2) / (2 * (self.width ** 2)))
-        # fy = np.exp(-((y_inp - self.y) ** 2) / (2 * (self.height ** 2)))
-        sigma_x = self.width / 6
-        sigma_y = self.height / 6
-
-        if self.x - sigma_x < x_inp < self.x + sigma_x:
+        if self.x - self.sigma_x < x_inp < self.x + self.sigma_x:
             px = 0.682
-        elif self.x - 3 * sigma_x < x_inp < self.x - sigma_x or self.x + sigma_x < x_inp < self.x + 3 * sigma_x:
+        elif self.x - 3 * self.sigma_x < x_inp < self.x - self.sigma_x\
+                or self.x + self.sigma_x < x_inp < self.x + 3 * self.sigma_x:
             px = 0.157
         else:
             px = 0.001
 
-        if self.y - sigma_y < y_inp < self.y + sigma_y:
+        if self.y - self.sigma_y < y_inp < self.y + self.sigma_y:
             py = 0.682
-        elif self.y - 3 * sigma_y < y_inp < self.y - sigma_y or self.y + sigma_y < y_inp < self.y + 3 * sigma_y:
+        elif self.y - 3 * self.sigma_y < y_inp < self.y - self.sigma_y\
+                or self.y + self.sigma_y < y_inp < self.y + 3 * self.sigma_y:
             py = 0.157
         else:
             py = 0.001
 
         # If you have never noticed the object again, you have no information about the length in z-axis.
-        if self.length != 0:
-            pz = 1 - (abs(self.z - z_inp)/max(self.z, z_inp))
-        else:
+        # TODO needs testing...
+        if self.length == 0:
             pz = 1
+        else:
+            pz = 1 - (abs(self.z + self.length / 2 - z_inp) / self.length)
         return px * py * pz
 
     def crop_pointcloud_client(self):
@@ -192,16 +196,16 @@ class ImageCapturer:
                 doc = yaml.load(stream)
                 self.depth_weight = doc["clustering"]["depth_weight"]
                 self.coordinates_weight = doc["clustering"]["coordinates_weight"]
-                self.nclusters = doc["clustering"]["number_of_clusters"]
-                self.depth_thresup = doc["clustering"]["depth_thresup"]
-                self.depth_thresdown = doc["clustering"]["depth_thresdown"]
+                self.n_clusters = doc["clustering"]["number_of_clusters"]
+                self.depth_thresh_up = doc["clustering"]["depth_thresup"]
+                self.depth_thresh_down = doc["clustering"]["depth_thresdown"]
             except yaml.YAMLError as exc:
                 print(exc)
                 # self.depth_weight = rospy.get_param("depth_weight")
                 # self.coordinates_weight = rospy.get_param("coordinates_weight")
-                # self.nclusters = rospy.get_param("number_of_clusters")
-                # self.depth_thresup = rospy.get_param("depth_thresup")
-                # self.depth_thresdown = rospy.get_param("depth_thresdown")
+                # self.n_clusters = rospy.get_param("number_of_clusters")
+                # self.depth_thresh_up = rospy.get_param("depth_thresup")
+                # self.depth_thresh_down = rospy.get_param("depth_thresdown")
                 # print(self.depth_weight)
 
     def camera_info_callback(self, msg_info):
@@ -260,15 +264,15 @@ class ImageCapturer:
         print("Objects so far found: " + str(len(self.detected_objects)))
 
     # Saves the newly found object in the list of detected objects and sends it to tf2_broadcaster node.
-    def save_and_send(self, object):
-        self.detected_objects.append(object)
+    def save_and_send(self, to_send_object):
+        self.detected_objects.append(to_send_object)
         msg = Detected_object()
-        msg.nameid = object.name_id
-        msg.x = object.x
-        msg.y = object.y
-        msg.z = object.z
-        msg.width = object.width
-        msg.height = object.height
+        msg.name_id = to_send_object.name_id
+        msg.x = to_send_object.x
+        msg.y = to_send_object.y
+        msg.z = to_send_object.z
+        msg.width = to_send_object.width
+        msg.height = to_send_object.height
         self.object_pub.publish(msg)
 
     def process(self):

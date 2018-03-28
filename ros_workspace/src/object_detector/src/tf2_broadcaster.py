@@ -16,7 +16,7 @@ class TFBroadcaster:
       
     def object_callback(self, msg):
         self.counter_of_detected_objects += 1
-        self.detected_objects.append(DetectedObject(msg.nameid, msg.x, msg.y, msg.z, msg.width, msg.height))
+        self.detected_objects.append(DetectedObject(msg.name_id, msg.x, msg.y, msg.z, msg.width, msg.height))
         print("Objects on the map: " + str(len(self.detected_objects)))
 
     def publish_tfs(self, event):
