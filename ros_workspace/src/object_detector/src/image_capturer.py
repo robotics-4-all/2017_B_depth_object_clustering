@@ -106,27 +106,41 @@ class DetectedObject:
     def update_dimensions(self, newly_observed_object):
         # Update the width, height and length according to the new "frame" of the object.
         # Average the two curves of normal distributions
-        # Credits: https://stats.stackexchange.com/questions/41279/how-can-i-combine-two-normal-distributions-functions
-        self.width = np.srt(self.width ^ 2 + newly_observed_object.width ^ 2) / 2
-        self.height = np.srt(self.height ^ 2 + newly_observed_object.height ^ 2) / 2
-        # TODO think about it again because with this you have to change width and height as well in a way.
-        # TODO maybe fuse two gaussians into one! numpy.convolve
+        # Credits: https://stats.stackexchange.com/questions/179213/mean-of-two-normal-distributions
+        self.width = np.sqrt(self.width ^ 2 + newly_observed_object.width ^ 2) / 2
+        self.height = np.sqrt(self.height ^ 2 + newly_observed_object.height ^ 2) / 2
         self.x = (self.x + newly_observed_object.x) / 2
-        self.y = (self.x + newly_observed_object.y) / 2
+        self.y = (self.y + newly_observed_object.y) / 2
+        self.z = (self.z + newly_observed_object.z) / 2
         if self.length < abs(newly_observed_object.z - self.z):
             self.length = abs(newly_observed_object.z - self.z)
 
     def norm_function(self, x_inp, y_inp, z_inp):
-        # Take formula of normal distribution and remove "/ np.sqrt(2 * np.pi * self.width**2)"
-        # sigma = width or height
-        fx = np.exp(-((x_inp - self.x) ** 2) / (2 * (self.width ** 2)))
-        fy = np.exp(-((y_inp - self.y) ** 2) / (2 * (self.height ** 2)))
+        # fx = np.exp(-((x_inp - self.x) ** 2) / (2 * (self.width ** 2)))
+        # fy = np.exp(-((y_inp - self.y) ** 2) / (2 * (self.height ** 2)))
+        sigma_x = self.width / 6
+        sigma_y = self.height / 6
+
+        if self.x - sigma_x < x_inp < self.x + sigma_x:
+            px = 0.682
+        elif self.x - 3 * sigma_x < x_inp < self.x - sigma_x or self.x + sigma_x < x_inp < self.x + 3 * sigma_x:
+            px = 0.157
+        else:
+            px = 0.001
+
+        if self.y - sigma_y < y_inp < self.y + sigma_y:
+            py = 0.682
+        elif self.y - 3 * sigma_y < y_inp < self.y - sigma_y or self.y + sigma_y < y_inp < self.y + 3 * sigma_y:
+            py = 0.157
+        else:
+            py = 0.001
+
         # If you have never noticed the object again, you have no information about the length in z-axis.
         if self.length != 0:
-            fz = np.exp(-((z_inp - self.z) ** 2) / (2 * (self.length ** 2)))
+            pz = 1 - (abs(self.z - z_inp)/max(self.z, z_inp))
         else:
-            fz = 1 - (abs(self.z - z_inp)/max(self.z, z_inp))
-        return fx * fy * fz
+            pz = 1
+        return px * py * pz
 
     def crop_pointcloud_client(self):
         rospy.wait_for_service('crop_pointcloud')
@@ -183,12 +197,12 @@ class ImageCapturer:
                 self.depth_thresdown = doc["clustering"]["depth_thresdown"]
             except yaml.YAMLError as exc:
                 print(exc)
-        # self.depth_weight = rospy.get_param("depth_weight")
-        # self.coordinates_weight = rospy.get_param("coordinates_weight")
-        # self.nclusters = rospy.get_param("number_of_clusters")
-        # self.depth_thresup = rospy.get_param("depth_thresup")
-        # self.depth_thresdown = rospy.get_param("depth_thresdown")
-        # print(self.depth_weight)
+                # self.depth_weight = rospy.get_param("depth_weight")
+                # self.coordinates_weight = rospy.get_param("coordinates_weight")
+                # self.nclusters = rospy.get_param("number_of_clusters")
+                # self.depth_thresup = rospy.get_param("depth_thresup")
+                # self.depth_thresdown = rospy.get_param("depth_thresdown")
+                # print(self.depth_weight)
 
     def camera_info_callback(self, msg_info):
         self.cx_d = msg_info.K[2]
@@ -224,7 +238,7 @@ class ImageCapturer:
         temp_img = self.bridge.imgmsg_to_cv2(msg_raw_depth, "16UC1")
         self.depth_raw_img = np.array(self.desired_shape, dtype=np.uint8)
         self.depth_raw_img = cv2.resize(temp_img, tuple(reversed(self.desired_shape)), interpolation=cv2.INTER_NEAREST)
-        self.depth_raw_img = cv2.convertScaleAbs(self.depth_raw_img, alpha=(255.0/np.amax(self.depth_raw_img)))
+        self.depth_raw_img = cv2.convertScaleAbs(self.depth_raw_img, alpha=(255.0 / np.amax(self.depth_raw_img)))
         self.depth_img = self.depth_raw_img
 
     def update_world_callback(self):
