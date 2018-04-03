@@ -9,7 +9,7 @@ from sklearn.cluster import KMeans
 from sensor_msgs.msg import Image, PointCloud2, CameraInfo
 import sensor_msgs.point_cloud2 as pc2
 
-from object_detector.msg import Detected_object
+from object_detector.msg import Detected_object, Point_feature_histogram
 from object_detector.srv import Box
 from cv_bridge import CvBridge, CvBridgeError
 import gui_editor
@@ -98,10 +98,6 @@ class DetectedObject:
               str(other_object.name_id + 1) + ": " + str(norm_prob_final) + "\n")
 
         if norm_prob_final > 0.8:
-            # It is the same object - so you have to update the dimensions  of it.
-            self.update_dimensions(other_object)
-            # Save another pfh of the current frame of the same object.
-            self.pfh.append(other_object.crop_pointcloud_client())
             return True
         else:
             return False
@@ -143,7 +139,9 @@ class DetectedObject:
         if self.length == 0:
             pz = 1
         else:
-            pz = 1 - (abs(self.z + self.length / 2 - z_inp) / self.length)
+            pz = 1 - ((abs(self.z + self.length / 2 - z_inp) - self.length) / self.length)
+            if pz < 0:
+                pz = 0
         return px * py * pz
 
     def crop_pointcloud_client(self):
@@ -163,9 +161,11 @@ class ImageCapturer:
         self.rgb_sub = rospy.Subscriber("/camera/rgb/image_color", Image, self.rgb_callback)
         self.pcl_sub = rospy.Subscriber("/camera/depth_registered/points", PointCloud2, self.pointcloud_callback)
         self.depth_raw_sub = rospy.Subscriber("/camera/depth_registered/image_raw", Image, self.raw_depth_callback)
-        self.camera_info_sub = rospy.Subscriber("camera/rgb/camera_info", CameraInfo, self.camera_info_callback)
         # TODO subscribe only once
+        self.camera_info_sub = rospy.Subscriber("camera/rgb/camera_info", CameraInfo, self.camera_info_callback)
+
         self.object_pub = rospy.Publisher('/object_found', Detected_object, queue_size=10)
+        self.pfh_pub = rospy.Publisher('/pfh_found', Point_feature_histogram, queue_size=10)
 
         # Camera infos - they will be updated with the Callback, hopefully.
         self.cx_d = 0
@@ -249,16 +249,32 @@ class ImageCapturer:
         detected_objects_length = len(self.detected_objects)
         # For every new object that was found, first check whether it exists and then send it to the tf2_broadcaster.
         for new_det_object in self.newly_detected_objects:
+            # Create the message for object_clusterer with the Point Feature Histogram and leave name_id for later.
+            new_pfh_msg = Point_feature_histogram()
+            new_pfh_msg.pfh = new_det_object.pfh
             # First time with no already found objects.
             if detected_objects_length == 0:
-                self.save_and_send(new_det_object)
+                self.save_and_send(new_det_object.pfh)
+                # Name_id is the same name_id with the one of the the object because it is the first time you see it.
+                new_pfh_msg.name_id = new_det_object.name_id
+                self.pfh_pub.publish(new_pfh_msg)
                 continue
             for i in range(0, detected_objects_length):
                 if self.detected_objects[i].is_the_same_object(new_det_object):
-                    # TODO add the new instance of pointclouds
+                    # It is the same object - so you have to update the dimensions  of it.
+                    self.detected_objects[i].update_dimensions(new_det_object)
+                    # Save another pfh of the current frame of the same object.
+                    self.detected_objects[i].pfh.append(new_det_object.crop_pointcloud_client())
+                    # Name_id is the same with the one of the already_found object as long as they are the same.
+                    new_pfh_msg.name_id = self.detected_objects[i].name_id
+                    self.pfh_pub.publish(new_pfh_msg)
                     break
+                # If you have checked the newly found object with all already found ones, save and send it.
                 if i == detected_objects_length - 1:
                     self.save_and_send(new_det_object)
+                    # Name_id is the same name_id with the one of the the object because it is the first time you see it
+                    new_pfh_msg.name_id = new_det_object.name_id
+                    self.pfh_pub.publish(new_pfh_msg)
         # Empty the list newly_detected_objects
         del self.newly_detected_objects[:]
         print("Objects so far found: " + str(len(self.detected_objects)))

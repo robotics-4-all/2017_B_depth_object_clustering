@@ -11,7 +11,7 @@ from sklearn.preprocessing import normalize
 
 
 def separate_objects_from_floor_and_wall(feature_vector, depth_weight, depth_thresh_up, depth_thresh_down):
-    height, width, channels = feature_vector[:,:,0:3].shape
+    height, width, channels = feature_vector[:, :, 0:3].shape
     feature_vector_array = feature_vector.reshape(height*width, 6)
 
     if depth_weight != 0:

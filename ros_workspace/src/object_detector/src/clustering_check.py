@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 import pandas
 import numpy as np
+from numpy.lib.function_base import average
+
 from sklearn import model_selection
 from sklearn.metrics import classification_report
 from sklearn.metrics import confusion_matrix
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, f1_score
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.cluster import KMeans
@@ -17,7 +19,7 @@ import itertools
 filename = 'Database/pfh.csv'
 df = pandas.read_csv(filename, delimiter=',')
 # Choose how many objects you want to cluster.
-df = df[df.Id < 6]
+df = df[df.Id < 7]
 
 # drop by Name
 df = df.drop(['Name'], axis=1)
@@ -74,27 +76,28 @@ print("Classification report is\n " + str(classification_report(Y_validation, pr
 max_k = 0
 max_silhouette_avg = 0
 # TODO check other methods of clustering
-# k_means = KMeans(n_clusters=n_labels, n_jobs=-1, max_iter=500, n_init=20).fit(X)
-# cluster_labels = k_means.fit_predict(X)
+k_means = KMeans(n_clusters=n_labels, n_jobs=-1, max_iter=500, n_init=20).fit(X)
+cluster_labels = k_means.fit_predict(X)
 
-dbscan = DBSCAN(eps=0.5, min_samples=5, metric='euclidean', algorithm='auto', leaf_size=30, n_jobs=-1)
-cluster_labels = dbscan.fit_predict(X)
-lala1 = np.unique(cluster_labels, return_counts=1)
-lala2 = len(lala1[0])
-print(lala2)
+# dbscan = DBSCAN(eps=0.5, min_samples=5, metric='euclidean', algorithm='auto', leaf_size=30, n_jobs=-1)
+# cluster_labels = dbscan.fit_predict(X)
+# lala1 = np.unique(cluster_labels, return_counts=1)
+# lala2 = len(lala1[0])
+# print(lala2)
 
 # Classes to Cluster evaluation
 combinations = np.array(list(itertools.permutations(range(n_labels))))
-max_acc = 0
+max_f1_score = 0
 for comb in combinations:
     new_cluster_labels = list(cluster_labels)
     for i in range(0, len(cluster_labels)):
         new_cluster_labels[i] = int(comb[cluster_labels[i]])
-    if max_acc < accuracy_score(Y, new_cluster_labels):
-        max_acc = accuracy_score(Y, new_cluster_labels)
+    if max_f1_score < f1_score(Y, new_cluster_labels, average="micro"):
+        max_f1_score = f1_score(Y, new_cluster_labels, average="micro")
         saved_cluster_labels = list(new_cluster_labels)
 
-print("Accuracy is " + str(accuracy_score(Y, saved_cluster_labels)))
+print("\nFor Classes to Cluster evaluation:")
+print("F1_score is " + str(f1_score(Y, saved_cluster_labels, average="micro")))
 print("Confusion Matrix is \n" + str(confusion_matrix(Y, saved_cluster_labels)))
 print("Clustering report is\n " + str(classification_report(Y, saved_cluster_labels)))
 
