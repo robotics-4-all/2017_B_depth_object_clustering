@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# Filename: object_detector.py
 from __future__ import print_function
 import rospy
 import cv2
@@ -38,7 +39,7 @@ class DetectedObject:
         self.name_id = name_id
         self.width = width  # real dimension of object in x-axis
         self.height = height  # real dimension of object in y-axis
-        self.length = 0  # real dimension of object in z-axis
+        self.length = 0  # real dimension of object in z-axis TODO is it the real - size length?
 
         self.x = x  # center of the object
         self.y = y  # center of the object
@@ -109,8 +110,8 @@ class DetectedObject:
         self.height = (self.height + newly_observed_object.height) / 2
         # Average the two curves of normal distributions
         # Credits: https://stats.stackexchange.com/questions/179213/mean-of-two-normal-distributions
-        self.sigma_x = np.sqrt(self.sigma_x ^ 2 + newly_observed_object.width ^ 2) / 2
-        self.sigma_y = np.sqrt(self.sigma_y ^ 2 + newly_observed_object.height ^ 2) / 2
+        self.sigma_x = np.sqrt((self.sigma_x ^ 2 + newly_observed_object.width ^ 2) / 2)
+        self.sigma_y = np.sqrt((self.sigma_y ^ 2 + newly_observed_object.height ^ 2) / 2)
         self.x = (self.x + newly_observed_object.x) / 2
         self.y = (self.y + newly_observed_object.y) / 2
         self.z = (self.z + newly_observed_object.z) / 2
@@ -118,21 +119,22 @@ class DetectedObject:
             self.length = abs(newly_observed_object.z - self.z)
 
     def norm_function(self, x_inp, y_inp, z_inp):
+        # TODO put some if - equals
         if self.x - self.sigma_x < x_inp < self.x + self.sigma_x:
             px = 0.682
         elif self.x - 3 * self.sigma_x < x_inp < self.x - self.sigma_x\
                 or self.x + self.sigma_x < x_inp < self.x + 3 * self.sigma_x:
-            px = 0.157
+            px = 0.314
         else:
-            px = 0.001
+            px = 0.004
 
         if self.y - self.sigma_y < y_inp < self.y + self.sigma_y:
             py = 0.682
         elif self.y - 3 * self.sigma_y < y_inp < self.y - self.sigma_y\
                 or self.y + self.sigma_y < y_inp < self.y + 3 * self.sigma_y:
-            py = 0.157
+            py = 0.314
         else:
-            py = 0.001
+            py = 0.004
 
         # If you have never noticed the object again, you have no information about the length in z-axis.
         # TODO needs testing...
@@ -156,7 +158,7 @@ class DetectedObject:
             print("Service call failed: " + str(e) + "\n")
 
 
-class ImageCapturer:
+class ObjectDetector:
     def __init__(self):
         self.rgb_sub = rospy.Subscriber("/camera/rgb/image_color", Image, self.rgb_callback)
         self.pcl_sub = rospy.Subscriber("/camera/depth_registered/points", PointCloud2, self.pointcloud_callback)
@@ -245,6 +247,40 @@ class ImageCapturer:
         self.depth_raw_img = cv2.convertScaleAbs(self.depth_raw_img, alpha=(255.0 / np.amax(self.depth_raw_img)))
         self.depth_img = self.depth_raw_img
 
+    def pointcloud_callback(self, msg_pcl):
+        self.pcl = msg_pcl
+
+    def process(self):
+        bounding_boxes = gui_editor.gui_editor(self.rgb_img, self.depth_img)
+        counter = len(self.detected_objects)
+        # For every newly found object.
+        for c in bounding_boxes:
+            x, y, w, h = cv2.boundingRect(c)
+            # Take the center of the bounding box of the object.
+            center_x = x + w / 2
+            center_y = y + h / 2
+            # Get the point from point cloud of the corresponding pixel.
+            # Multiply by the desired factor the pixel's position, because I have scaled the images by this number.
+            coords = return_pcl(center_x * self.desired_divide_factor, center_y * self.desired_divide_factor, self.pcl)
+            # Based on formula: x3D = (x * 2 - self.cx_d) * z3D/self.fx_d
+            # Based on formula: y3D = (y * 2 - self.cy_d) * z3D/self.fy_d
+            real_width = self.desired_divide_factor * w * coords[2] / self.fx_d
+            real_height = self.desired_divide_factor * h * coords[2] / self.fy_d
+
+            # TODO take into mind that there going to be some gaps in the objects
+            # TODO a fix would be to take the median value of the bounding box
+            # self.depth_raw_img[y][x] * 0.001 = coords[2]
+
+            # Crop the image and get just the bounding box.
+            crop_rgb_img = self.rgb_img[y:y + h, x:x + w]
+            crop_depth_img = self.depth_img[y:y + h, x:x + w]
+
+            det_object = DetectedObject(counter, coords[0], coords[1], coords[2], real_width, real_height, crop_rgb_img,
+                                        crop_depth_img, self.pcl)
+            self.newly_detected_objects.append(det_object)
+            counter += 1
+        self.update_world_callback()
+
     def update_world_callback(self):
         detected_objects_length = len(self.detected_objects)
         # For every new object that was found, first check whether it exists and then send it to the tf2_broadcaster.
@@ -291,44 +327,9 @@ class ImageCapturer:
         msg.height = to_send_object.height
         self.object_pub.publish(msg)
 
-    def process(self):
-        bounding_boxes = gui_editor.gui_editor(self.rgb_img, self.depth_img)
-        counter = len(self.detected_objects)
-        # For every newly found object.
-        for c in bounding_boxes:
-            x, y, w, h = cv2.boundingRect(c)
-            # Take the center of the bounding box of the object.
-            center_x = x + w / 2
-            center_y = y + h / 2
-            # Get the point from point cloud of the corresponding pixel.
-            # Multiply by the desired factor the pixel's position, because I have scaled the images by this number.
-            coords = return_pcl(center_x * self.desired_divide_factor, center_y * self.desired_divide_factor, self.pcl)
-            # Based on formula: x3D = (x * 2 - self.cx_d) * z3D/self.fx_d
-            # Based on formula: y3D = (y * 2 - self.cy_d) * z3D/self.fy_d
-            real_width = self.desired_divide_factor * w * coords[2] / self.fx_d
-            real_height = self.desired_divide_factor * h * coords[2] / self.fy_d
-
-            # TODO take into mind that there going to be some gaps in the objects
-            # TODO a fix would be to take the median value of the bounding box
-            # self.depth_raw_img[y][x] * 0.001 = coords[2]
-
-            # Crop the image and get just the bounding box.
-            crop_rgb_img = self.rgb_img[y:y + h, x:x + w]
-            crop_depth_img = self.depth_img[y:y + h, x:x + w]
-
-            det_object = DetectedObject(counter, coords[0], coords[1], coords[2], real_width, real_height, crop_rgb_img,
-                                        crop_depth_img, self.pcl)
-            self.newly_detected_objects.append(det_object)
-            counter += 1
-        self.update_world_callback()
-
-    def pointcloud_callback(self, msg_pcl):
-        self.pcl = msg_pcl
-
-
 def main():
-    ImageCapturer()
-    rospy.init_node('ImageCapturer', anonymous=True)
+    ObjectDetector()
+    rospy.init_node('object_detector', anonymous=True)
     try:
         rospy.spin()
     except KeyboardInterrupt:

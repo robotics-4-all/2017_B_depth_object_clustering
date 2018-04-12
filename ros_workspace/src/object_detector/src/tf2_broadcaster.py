@@ -4,7 +4,7 @@ import rospy
 import tf2_msgs.msg
 import geometry_msgs.msg
 from object_detector.msg import Detected_object
-from image_capturer import DetectedObject
+from object_detector import DetectedObject
 
 
 class TFBroadcaster:
