@@ -274,14 +274,13 @@ class ObjectDetector:
             # Crop the image and get just the bounding box.
             crop_rgb_img = self.rgb_img[y:y + h, x:x + w]
             crop_depth_img = self.depth_img[y:y + h, x:x + w]
-
             det_object = DetectedObject(counter, coords[0], coords[1], coords[2], real_width, real_height, crop_rgb_img,
                                         crop_depth_img, self.pcl)
             self.newly_detected_objects.append(det_object)
             counter += 1
-        self.update_world_callback()
+        self.update_world()
 
-    def update_world_callback(self):
+    def update_world(self):
         detected_objects_length = len(self.detected_objects)
         # For every new object that was found, first check whether it exists and then send it to the tf2_broadcaster.
         for new_det_object in self.newly_detected_objects:
@@ -290,7 +289,7 @@ class ObjectDetector:
             new_pfh_msg.pfh = new_det_object.pfh
             # First time with no already found objects.
             if detected_objects_length == 0:
-                self.save_and_send(new_det_object.pfh)
+                self.save_and_send(new_det_object)
                 # Name_id is the same name_id with the one of the the object because it is the first time you see it.
                 new_pfh_msg.name_id = new_det_object.name_id
                 self.pfh_pub.publish(new_pfh_msg)
@@ -327,9 +326,10 @@ class ObjectDetector:
         msg.height = to_send_object.height
         self.object_pub.publish(msg)
 
+
 def main():
     ObjectDetector()
-    rospy.init_node('object_detector', anonymous=True)
+    rospy.init_node('object_detector_node', anonymous=True)
     try:
         rospy.spin()
     except KeyboardInterrupt:
