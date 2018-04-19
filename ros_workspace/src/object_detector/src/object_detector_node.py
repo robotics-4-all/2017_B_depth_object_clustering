@@ -25,7 +25,6 @@ def print_cielab_without_opencv(color):
 
 # Returns the point in PointCloud regarding to the pixel in image.
 def return_pcl(x_img, y_img, pcl):
-    # TODO there is an error with objects, which have gaps.
     # Solution maybe to find the median of the bounding box.
     if (y_img >= pcl.height) or (x_img >= pcl.width):
         return -1
@@ -39,7 +38,7 @@ class DetectedObject:
         self.name_id = name_id
         self.width = width  # real dimension of object in x-axis
         self.height = height  # real dimension of object in y-axis
-        self.length = 0  # real dimension of object in z-axis TODO is it the real - size length?
+        self.length = 0  # real dimension of object in z-axis
 
         self.x = x  # center of the object
         self.y = y  # center of the object
@@ -89,16 +88,15 @@ class DetectedObject:
 
         # Use norm_function to get the probability to be the same object
         dist_prob = 1 - self.norm_function(other_object.x, other_object.y, other_object.z)
-        print([norm_dist_color, norm_dist_width, norm_dist_height, dist_prob])
         weights = [10, 1, 1, 10]
-        norm_distances = [norm_dist_color, norm_dist_width, norm_dist_width, dist_prob]
+        norm_distances = [norm_dist_color, norm_dist_width, norm_dist_height, dist_prob]
         dist_final = np.inner(norm_distances, weights)
         norm_dist_final = dist_final / sum(weights)
         norm_prob_final = 1 - norm_dist_final
         print("Final normalised probability to be object-" + str(self.name_id + 1) + " same with object-" +
               str(other_object.name_id + 1) + ": " + str(norm_prob_final) + "\n")
 
-        if norm_prob_final > 0.8:
+        if norm_prob_final > 0.7:
             return True
         else:
             return False
@@ -110,17 +108,20 @@ class DetectedObject:
         self.height = (self.height + newly_observed_object.height) / 2
         # Average the two curves of normal distributions
         # Credits: https://stats.stackexchange.com/questions/179213/mean-of-two-normal-distributions
-        self.sigma_x = np.sqrt((self.sigma_x ^ 2 + newly_observed_object.width ^ 2) / 2)
-        self.sigma_y = np.sqrt((self.sigma_y ^ 2 + newly_observed_object.height ^ 2) / 2)
-        self.x = (self.x + newly_observed_object.x) / 2
-        self.y = (self.y + newly_observed_object.y) / 2
-        self.z = (self.z + newly_observed_object.z) / 2
+        # Credits: http://epaxon.blogspot.gr/2012/12/bayesian-inference-with-probabilistic.html
+        self.sigma_x = np.sqrt((self.sigma_x ** 2 + newly_observed_object.width ** 2) / 2)
+        self.sigma_y = np.sqrt((self.sigma_y ** 2 + newly_observed_object.height ** 2) / 2)
+        sum_sigmas2_x = self.sigma_x ** 2 + newly_observed_object.sigma_x ** 2
+        sum_sigmas2_y = self.sigma_y ** 2 + newly_observed_object.sigma_y ** 2
+        self.x = self.x * (newly_observed_object.sigma_x ** 2 /
+                           sum_sigmas2_x) + newly_observed_object.x * (self.sigma_x ** 2/sum_sigmas2_x)
+        self.y = self.y * (newly_observed_object.sigma_y ** 2 /
+                           sum_sigmas2_y) + newly_observed_object.y * (self.sigma_y ** 2 / sum_sigmas2_y)
         if self.length < abs(newly_observed_object.z - self.z):
             self.length = abs(newly_observed_object.z - self.z)
 
     def norm_function(self, x_inp, y_inp, z_inp):
-        # TODO put some if - equals
-        if self.x - self.sigma_x < x_inp < self.x + self.sigma_x:
+        if self.x - self.sigma_x <= x_inp <= self.x + self.sigma_x:
             px = 0.682
         elif self.x - 3 * self.sigma_x < x_inp < self.x - self.sigma_x\
                 or self.x + self.sigma_x < x_inp < self.x + 3 * self.sigma_x:
@@ -128,7 +129,7 @@ class DetectedObject:
         else:
             px = 0.004
 
-        if self.y - self.sigma_y < y_inp < self.y + self.sigma_y:
+        if self.y - self.sigma_y <= y_inp <= self.y + self.sigma_y:
             py = 0.682
         elif self.y - 3 * self.sigma_y < y_inp < self.y - self.sigma_y\
                 or self.y + self.sigma_y < y_inp < self.y + 3 * self.sigma_y:
@@ -138,18 +139,21 @@ class DetectedObject:
 
         # If you have never noticed the object again, you have no information about the length in z-axis.
         # TODO needs testing...
-        if self.length == 0:
+        # The dimensions are in meters. So assume that objects with same characteristics are at least 1.5 meters far
+        # away from each other.
+        if self.length == 0 or self.z - z_inp < 1.5:
             pz = 1
+        # else:
+        #     pz = 1 - ((abs(self.z - z_inp) - self.length / 2) / self.length)
+        #     if pz < 0:
+        #         pz = 0
         else:
-            pz = 1 - ((abs(self.z + self.length / 2 - z_inp) - self.length) / self.length)
-            if pz < 0:
-                pz = 0
+            pz = 0
         return px * py * pz
 
     def crop_pointcloud_client(self):
         rospy.wait_for_service('crop_pointcloud')
         try:
-            print("Service called\n")
             crop_pointcloud = rospy.ServiceProxy('crop_pointcloud', Box)
             object_pointcloud = crop_pointcloud(self.x, self.y, self.z, self.width,
                                                 self.height, self.whole_pointcloud)  # TODO replace z with median z?
@@ -261,15 +265,15 @@ class ObjectDetector:
             center_y = y + h / 2
             # Get the point from point cloud of the corresponding pixel.
             # Multiply by the desired factor the pixel's position, because I have scaled the images by this number.
-            coords = return_pcl(center_x * self.desired_divide_factor, center_y * self.desired_divide_factor, self.pcl)
+            try:
+                coords = return_pcl(center_x * self.desired_divide_factor, center_y * self.desired_divide_factor, self.pcl)
+            except IndexError:
+                print("WARNING: Found object with gaps, let's ignore it!")
+                continue
             # Based on formula: x3D = (x * 2 - self.cx_d) * z3D/self.fx_d
             # Based on formula: y3D = (y * 2 - self.cy_d) * z3D/self.fy_d
             real_width = self.desired_divide_factor * w * coords[2] / self.fx_d
             real_height = self.desired_divide_factor * h * coords[2] / self.fy_d
-
-            # TODO take into mind that there going to be some gaps in the objects
-            # TODO a fix would be to take the median value of the bounding box
-            # self.depth_raw_img[y][x] * 0.001 = coords[2]
 
             # Crop the image and get just the bounding box.
             crop_rgb_img = self.rgb_img[y:y + h, x:x + w]
@@ -286,7 +290,7 @@ class ObjectDetector:
         for new_det_object in self.newly_detected_objects:
             # Create the message for object_clusterer with the Point Feature Histogram and leave name_id for later.
             new_pfh_msg = Point_feature_histogram()
-            new_pfh_msg.pfh = new_det_object.pfh
+            new_pfh_msg.pfh = new_det_object.pfh[0]
             # First time with no already found objects.
             if detected_objects_length == 0:
                 self.save_and_send(new_det_object)
