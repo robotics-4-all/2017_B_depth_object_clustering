@@ -24,7 +24,7 @@ def separate_objects_from_floor_and_wall(feature_vector, depth_weight, depth_thr
     feature_vector_array = normalize(feature_vector_array, norm='max', axis=0)
     feature_vector_array[:, -1] = feature_vector_array[:, -1] * depth_weight
 
-    k_means = KMeans(n_clusters=2).fit(feature_vector_array[:, [0, 1, 2, 5]])
+    k_means = KMeans(n_clusters=2, n_jobs = 1).fit(feature_vector_array[:, [0, 1, 2, 5]])
     # TODO Luminosity removes also some white objects from white floor
     # TODO cannot put n_jobs = -1
 
@@ -78,7 +78,6 @@ def clusterer(img_rgb, img_depth, n_clusters, depth_weight, coord_weight, depth_
     feature_vector[:, :, 0:3] = img_lab
     feature_vector[:, :, 3:5] = img_coord[:, :, 0:1]  # x+y
     feature_vector[:, :, 5] = img_coord[:, :, 2]
-    # TODO test in more depth the function separate_objects_from_floor_and_wall
     feature_vector[:, :, 5] = separate_objects_from_floor_and_wall(feature_vector, 4, 100, depth_thresh_down)  # z
 
     feature_vector_array = feature_vector.reshape(height*width, 6)

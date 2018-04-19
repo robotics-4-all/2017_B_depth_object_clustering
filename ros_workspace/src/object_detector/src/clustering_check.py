@@ -33,7 +33,7 @@ n_labels = len(temp[0])
 # Preprocessing Method 1
 # axis used to normalize the data along. If 1, independently normalize each sample,
 # otherwise (if 0) normalize each feature.
-# X = preprocessing.normalize(X, norm='max', axis=0)  # TODO maybe you don't need it
+# X = preprocessing.normalize(X, norm='max', axis=0)
 # Preprocessing Method 2
 # X_std = (X - X.min(axis=0)) / (X.max(axis=0) - X.min(axis=0))
 # X_scaled = X_std * (max - min) + min
@@ -78,12 +78,6 @@ max_silhouette_avg = 0
 # TODO check other methods of clustering
 k_means = KMeans(n_clusters=n_labels, n_jobs=-1, max_iter=500, n_init=20).fit(X)
 cluster_labels = k_means.fit_predict(X)
-
-# dbscan = DBSCAN(eps=0.5, min_samples=5, metric='euclidean', algorithm='auto', leaf_size=30, n_jobs=-1)
-# cluster_labels = dbscan.fit_predict(X)
-# lala1 = np.unique(cluster_labels, return_counts=1)
-# lala2 = len(lala1[0])
-# print(lala2)
 
 # Classes to Cluster evaluation
 combinations = np.array(list(itertools.permutations(range(n_labels))))

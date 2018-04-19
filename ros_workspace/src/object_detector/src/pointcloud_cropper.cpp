@@ -19,9 +19,10 @@ bool crop_pointcloud(object_detector::Box::Request &req, object_detector::Box::R
     pcl::fromROSMsg(req.whole_pointcloud, *cloudIn);
 
     pcl::CropBox<pcl::PointXYZ> boxFilter;
-    boxFilter.setMin(Eigen::Vector4f(req.x - req.width/2, req.y - req.height/2, req.z - 1, 1.0)); // TODO find overlap
-                                                                                                  // TODO of objects
-    boxFilter.setMax(Eigen::Vector4f(req.x + req.width/2, req.y + req.height/2, req.z + 1, 1.0)); // TODO find median z
+    // Accept minimum depth of an object 0.05m.
+    boxFilter.setMin(Eigen::Vector4f(req.x - req.width/2, req.y - req.height/2, req.z - 0.05, 1.0));
+
+    boxFilter.setMax(Eigen::Vector4f(req.x + req.width/2, req.y + req.height/2, req.z + 0.05, 1.0));
     boxFilter.setInputCloud(cloudIn);
     pcl::PointCloud<pcl::PointXYZ>::Ptr bodyFiltered(new pcl::PointCloud<pcl::PointXYZ>);
     boxFilter.filter(*cloudOut);
@@ -34,12 +35,9 @@ bool crop_pointcloud(object_detector::Box::Request &req, object_detector::Box::R
 //    }
 
     // Convert from pcl::PointCloud<pcl::PointXYZ> to sensor_msgs/PointCloud2 and send the response back to client.
-//    pcl::toROSMsg(*cloudOut, res.object_pointcloud);
-//    std::cout << "My stuff is " << pfh_estimator(*cloudOut) << std::endl;
     Eigen::VectorXf temp_vector = pfh_estimator(*cloudOut);
     for (int i = 0; i<125; i++){
         res.pfh[i] = temp_vector[i];
-//        std::cout << temp_vector << std::endl;
     }
 
     return true;

@@ -3,17 +3,24 @@ clear; clc;
 mu1 = 2;
 sigma_1 = 0.5;
 
-mu2 = 2;
-sigma_2 = 1.5;
+mu2 = 4;
+sigma_2 = 1.3;
 
-mu_conv = (mu1 + mu2);
-sigma_conv = sqrt(sigma_1^2 + sigma_2^2);
+mu_mine3 = (sigma_2^2 *mu1 + sigma_1^2 * mu2)/(sigma_1^2 + sigma_2^2);
+sigma_mine3 = sqrt((sigma_1^2 + sigma_2^2)/2);
 
 mu_mine = (mu1 + mu2)/2;
-sigma_mine = sqrt((sigma_1^2 + sigma_2^2)/4);
+sigma_mine = sqrt((sigma_1^2 + sigma_2^2)/2);
 
-x = linspace(min(-4*sigma_1 + mu1, -4*sigma_conv + mu_conv), ...
-    max(4*sigma_2 + mu2, 4*sigma_conv + mu_conv),1000);
+mu_mine2 = mu_mine;
+sigma_mine2 = sigma_mine;
+for i = 1:20
+    mu_mine2 = (mu1 + mu_mine2)/2;
+    sigma_mine2 = sqrt((sigma_1^2 + sigma_mine2^2)/2);
+end
+
+x = linspace(min(-4*sigma_1 + mu1, -4*sigma_mine3 + mu_mine3), ...
+    max(4*sigma_2 + mu2, 4*sigma_mine3 + mu_mine3),1000);
 
 %% 1st gaussian like
 y1a = 1/sqrt(2*pi*sigma_1^2);
@@ -25,11 +32,11 @@ y2a = 1/sqrt(2*pi*sigma_2^2);
 y2b = exp(-(x-mu2).^2/(2*sigma_2^2));
 y2 = y2a * y2b;
 
-%% Merging with convolution with precomputed values 
+%% Merging with mine3olution with precomputed values 
 % http://www.tina-vision.net/docs/memos/2003-003.pdf
-ya = 1/sqrt(2*pi*sigma_conv^2);
-yb = exp(-(x-mu_conv).^2/(2*sigma_conv^2));
-y = ya * yb;
+y_mine3a = 1/sqrt(2*pi*sigma_mine3^2);
+y_mine3b = exp(-(x-mu_mine3).^2/(2*sigma_mine3^2));
+y_mine3 = y_mine3a * y_mine3b;
 hold on;
 
 %% Mine Combination
@@ -39,15 +46,25 @@ y_mineb = exp(-(x-mu_mine).^2/(2*sigma_mine^2));
 y_mine = y_minea * y_mineb;
 hold on;
 
+%% Mine Combination dummy
+y_mine2a = 1/sqrt(2*pi*sigma_mine2^2);
+y_mine2b = exp(-(x-mu_mine2).^2/(2*sigma_mine2^2));
+y_mine2 = y_mine2a * y_mine2b;
+hold on;
+
 %% Plot
 
 plot(x,y1);
 hold on;
 plot(x,y2);
 hold on;
-plot(x,y);
-hold on;
-plot(x,y_mine);
+% plot(x,y);
+% hold on;
+% plot(x,y_mine);
+% hold on;
+plot(x,y_mine3);
 hold on;
 
-legend('y_1','y_2','y_{convolution}','y_{mine}');
+% legend('y_1','y_2','y_{mine3}','y_{mine}','^{y_{mine}+y_1}/_{2}');
+legend('y_1','y_2','y_{mean}');
+
