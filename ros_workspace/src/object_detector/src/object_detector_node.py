@@ -104,6 +104,8 @@ class DetectedObject:
     def update_dimensions(self, newly_observed_object):
         # Update the width, height and length according to the new "frame" of the object.
         # Treat real dimensions and sigmas in a different way.
+        # TODO think of what happens if you see less and less of the object. The dimensions are getting smaller.
+        # TODO Maybe take this approach only when it gets bigger and bigger.
         self.width = (self.width + newly_observed_object.width) / 2
         self.height = (self.height + newly_observed_object.height) / 2
         # Average the two curves of normal distributions
@@ -164,7 +166,7 @@ class DetectedObject:
 
 class ObjectDetector:
     def __init__(self):
-        self.rgb_sub = rospy.Subscriber("/camera/rgb/image_color", Image, self.rgb_callback)
+        self.rgb_sub = rospy.Subscriber("/camera/rgb/image_rect_color", Image, self.rgb_callback)
         self.pcl_sub = rospy.Subscriber("/camera/depth_registered/points", PointCloud2, self.pointcloud_callback)
         self.depth_raw_sub = rospy.Subscriber("/camera/depth_registered/image_raw", Image, self.raw_depth_callback)
         # TODO subscribe only once
@@ -235,7 +237,11 @@ class ObjectDetector:
             k = cv2.waitKey(1) & 0xFF
             if k == 114:  # if you press r, trigger the processing
                 cv2.destroyAllWindows()
-                self.process()
+                try:
+                    self.process()
+                except NameError as warn:
+                    cv2.destroyAllWindows()
+                    print(warn)
                 print("\nPress R if you want to trigger GUI for object detection...")
                 print("Press Esc if you want to end the suffer of this node...\n")
             if k == 27:  # if you press Esc, kill the node
@@ -244,14 +250,17 @@ class ObjectDetector:
             print(e)
 
     def raw_depth_callback(self, msg_raw_depth):
-        # Raw image from device. Contains uint16 depths in mm.
-        temp_img = self.bridge.imgmsg_to_cv2(msg_raw_depth, "16UC1")
-        self.depth_raw_img = np.array(self.desired_shape, dtype=np.uint8)
+        # Raw image from device. Contains uint32 depths in mm.
+        temp_img = self.bridge.imgmsg_to_cv2(msg_raw_depth, "passthrough")
+        self.depth_raw_img = np.array(self.desired_shape, dtype=np.uint32)
         self.depth_raw_img = cv2.resize(temp_img, tuple(reversed(self.desired_shape)), interpolation=cv2.INTER_NEAREST)
+        nans_positions = np.isnan(self.depth_raw_img)
+        self.depth_raw_img[nans_positions] = 0
         self.depth_raw_img = cv2.convertScaleAbs(self.depth_raw_img, alpha=(255.0 / np.amax(self.depth_raw_img)))
         self.depth_img = self.depth_raw_img
 
     def pointcloud_callback(self, msg_pcl):
+        # TODO synchronize pcl with images
         self.pcl = msg_pcl
 
     def process(self):
@@ -266,7 +275,9 @@ class ObjectDetector:
             # Get the point from point cloud of the corresponding pixel.
             # Multiply by the desired factor the pixel's position, because I have scaled the images by this number.
             try:
-                coords = return_pcl(center_x * self.desired_divide_factor, center_y * self.desired_divide_factor, self.pcl)
+                coords = return_pcl(center_x * self.desired_divide_factor,
+                                    center_y * self.desired_divide_factor,
+                                    self.pcl)
             except IndexError:
                 print("WARNING: Found object with gaps, let's ignore it!")
                 continue
@@ -334,6 +345,7 @@ class ObjectDetector:
 def main():
     ObjectDetector()
     rospy.init_node('object_detector_node', anonymous=True)
+    rospy.loginfo("object_detector_node is up!")
     try:
         rospy.spin()
     except KeyboardInterrupt:

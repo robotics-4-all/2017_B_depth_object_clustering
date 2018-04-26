@@ -33,7 +33,7 @@ def gui_editor(rgb_img, depth_img):
             # Set the default values fot the track bars
             cv2.setTrackbarPos('Clusters', 'image', doc["clustering"]["number_of_clusters"])
             cv2.setTrackbarPos('Depth Weight1', 'image', 3)
-            cv2.setTrackbarPos('Depth Weight2', 'image', 0)
+            cv2.setTrackbarPos('Depth Weight2', 'image', 1)
             # ~ cv2.setTrackbarPos('Coord Weight','image', doc["clustering"]["coordinates_weight"])
             cv2.setTrackbarPos('Depth ThreshUp', 'image', doc["clustering"]["depth_thresup"])
             cv2.setTrackbarPos('Depth ThreshDown', 'image', doc["clustering"]["depth_thresdown"])
