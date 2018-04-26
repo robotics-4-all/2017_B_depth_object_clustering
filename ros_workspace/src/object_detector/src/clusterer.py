@@ -10,7 +10,7 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import normalize
 
 
-def separate_objects_from_floor_and_wall(feature_vector, depth_weight, depth_thresh_up, depth_thresh_down):
+def remove_background(feature_vector, depth_weight, depth_thresh_up, depth_thresh_down):
     height, width, channels = feature_vector[:, :, 0:3].shape
     feature_vector_array = feature_vector.reshape(height*width, 6)
 
@@ -20,13 +20,14 @@ def separate_objects_from_floor_and_wall(feature_vector, depth_weight, depth_thr
         condition = np.logical_and(condition_up, condition_down)
         feature_vector_array = feature_vector_array[np.where(condition)]
 
+    if len(feature_vector_array) == 0:
+        raise NameError('Thresholds are too small')
+
     # Normalize features
     feature_vector_array = normalize(feature_vector_array, norm='max', axis=0)
     feature_vector_array[:, -1] = feature_vector_array[:, -1] * depth_weight
 
-    k_means = KMeans(n_clusters=2, n_jobs = 1).fit(feature_vector_array[:, [0, 1, 2, 5]])
-    # TODO Luminosity removes also some white objects from white floor
-    # TODO cannot put n_jobs = -1
+    k_means = KMeans(n_clusters=2, n_jobs=1).fit(feature_vector_array[:, [0, 1, 2, 5]])
 
     processed_img_depth = feature_vector[:, :, -1].copy()
 
@@ -34,32 +35,44 @@ def separate_objects_from_floor_and_wall(feature_vector, depth_weight, depth_thr
     depth_sum_cluster0 = []
     depth_sum_cluster1 = []
 
+    depth_pos_cluster0 = []
+    depth_pos_cluster1 = []
+
     non_zero_depth_counter = 0
     for i in range(0, height):
         for j in range(0, width):
             if depth_thresh_down < feature_vector[i, j, -1] < depth_thresh_up:
                 if k_means.labels_[non_zero_depth_counter] == 0:
                     depth_sum_cluster0.append(feature_vector[i, j, -1])
+                    depth_pos_cluster0.append(i)
                 else:
                     depth_sum_cluster1.append(feature_vector[i, j, -1])
+                    depth_pos_cluster1.append(i)
                 non_zero_depth_counter += 1
 
     # Find the average distance of each cluster.
-    if sum(depth_sum_cluster0)/len(depth_sum_cluster0) > sum(depth_sum_cluster1)/len(depth_sum_cluster1):
-        further_cluster = 0
+    # if sum(depth_sum_cluster0)/len(depth_sum_cluster0) > sum(depth_sum_cluster1)/len(depth_sum_cluster1):
+    #     background_cluster = 0
+    # else:
+    #     background_cluster = 1
+
+    # Find which cluster has lower (y axis) pixels regarding to the frame of depth image.
+    if sum(depth_pos_cluster0)/len(depth_pos_cluster0) > sum(depth_pos_cluster1)/len(depth_pos_cluster1):
+        background_cluster = 0
     else:
-        further_cluster = 1
+        background_cluster = 1
 
     # Remove pixels that belong to the cluster that has the furthest points.
     non_zero_depth_counter = 0
     for i in range(0, height):
         for j in range(0, width):
             if depth_thresh_down < feature_vector[i, j, -1] < depth_thresh_up:
-                if k_means.labels_[non_zero_depth_counter] == further_cluster:
+                if k_means.labels_[non_zero_depth_counter] == background_cluster:
                     processed_img_depth[i, j] = 0
                 non_zero_depth_counter += 1
             else:
                 processed_img_depth[i, j] = 0
+    cv2.imshow("Background", processed_img_depth)
     return processed_img_depth
 
 
@@ -78,7 +91,7 @@ def clusterer(img_rgb, img_depth, n_clusters, depth_weight, coord_weight, depth_
     feature_vector[:, :, 0:3] = img_lab
     feature_vector[:, :, 3:5] = img_coord[:, :, 0:1]  # x+y
     feature_vector[:, :, 5] = img_coord[:, :, 2]
-    feature_vector[:, :, 5] = separate_objects_from_floor_and_wall(feature_vector, 4, 100, depth_thresh_down)  # z
+    feature_vector[:, :, 5] = remove_background(feature_vector, 0.3, depth_thresh_up, depth_thresh_down)  # z
 
     feature_vector_array = feature_vector.reshape(height*width, 6)
 
@@ -88,6 +101,9 @@ def clusterer(img_rgb, img_depth, n_clusters, depth_weight, coord_weight, depth_
         condition_down = feature_vector_array[:, -1] > depth_thresh_down
         condition = np.logical_and(condition_up, condition_down)
         feature_vector_array = feature_vector_array[np.where(condition)]
+
+    if len(feature_vector_array) == 0:
+        raise NameError('Thresholds are too small.')
 
     # Normalize the features
     feature_vector_array = normalize(feature_vector_array, norm='max', axis=0)
