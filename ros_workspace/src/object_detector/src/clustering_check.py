@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import pandas
 import numpy as np
-from numpy.lib.function_base import average
 
 from sklearn import model_selection
 from sklearn.metrics import classification_report
@@ -16,7 +15,7 @@ from sklearn import preprocessing
 import itertools
 
 
-filename = 'Database/pfh.csv'
+filename = 'Database/pfh_6.csv'
 df = pandas.read_csv(filename, delimiter=',')
 # Choose how many objects you want to cluster.
 df = df[df.Id < 7]

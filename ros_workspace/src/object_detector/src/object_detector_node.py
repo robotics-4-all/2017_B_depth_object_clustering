@@ -1,7 +1,9 @@
 #!/usr/bin/env python
-# Filename: object_detector.py
+# Filename: object_detector_node.py
 from __future__ import print_function
 import rospy
+import tf
+from tf import TransformListener
 import cv2
 import yaml
 import numpy as np
@@ -27,22 +29,28 @@ def print_cielab_without_opencv(color):
 def return_pcl(x_img, y_img, pcl):
     # Solution maybe to find the median of the bounding box.
     if (y_img >= pcl.height) or (x_img >= pcl.width):
-        return -1
+        raise NameError('Something is wrong with the translations between image and Pointcloud.')
     data_out = list(pc2.read_points(pcl, field_names=("x", "y", "z"), skip_nans=True, uvs=[[x_img, y_img]]))
     int_data = data_out[0]
     return int_data
 
 
 class DetectedObject:
-    def __init__(self, name_id, x, y, z, width, height, crop_rgb_img=None, crop_depth_img=None, pointcloud=None):
+    def __init__(self, name_id, pcl_x, pcl_y, pcl_z, world_x, world_y, world_z, width, height,
+                 crop_rgb_img=None, crop_depth_img=None, pointcloud=None):
         self.name_id = name_id
         self.width = width  # real dimension of object in x-axis
         self.height = height  # real dimension of object in y-axis
         self.length = 0  # real dimension of object in z-axis
 
-        self.x = x  # center of the object
-        self.y = y  # center of the object
-        self.z = z  # center of the object
+        self.x = world_x  # center of the object
+        self.y = world_y  # center of the object
+        self.z = world_z  # center of the object
+
+        self.pcl_x = pcl_x
+        self.pcl_y = pcl_y
+        self.pcl_z = pcl_z
+
         self.sigma_x = self.width / 6  # standard deviation in x-axis
         self.sigma_y = self.height / 6  # standard deviation in y-axis
 
@@ -58,7 +66,7 @@ class DetectedObject:
             image = cv2.cvtColor(crop_rgb_img, cv2.COLOR_BGR2LAB)
             image_array = image.reshape(height_img * width_img, channels)
             num_dom_colors = 2
-            k_means = KMeans(n_clusters=num_dom_colors, init='random').fit(image_array)
+            k_means = KMeans(n_clusters=num_dom_colors, init='random', n_jobs=1).fit(image_array)
             # Grab the number of different clusters & create a histogram based on the number of pixels
             # assigned to each cluster. After that, find the cluster with most pixels - that will be the dominant color.
             num_labels = np.arange(0, len(np.unique(k_means.labels_)) + 1)
@@ -78,7 +86,7 @@ class DetectedObject:
         # L in [0, 100], a in [-127, 127], b in [-127, 127]
         # And according to OpenCV L=L*255/100,a=a+128,b=b+128 for 8-bit images
         # L in [0, 255], a in [1, 255], b in [1, 255]
-        norm_dist_color = dist_color / np.sqrt(255 ** 2 + 254 ** 2 + 254 ** 2) / 2
+        norm_dist_color = dist_color / np.sqrt(255 ** 2 + 254 ** 2 + 254 ** 2)
 
         # Real Width and Height distance
         dist_width = abs(self.width - other_object.width)
@@ -93,10 +101,12 @@ class DetectedObject:
         dist_final = np.inner(norm_distances, weights)
         norm_dist_final = dist_final / sum(weights)
         norm_prob_final = 1 - norm_dist_final
-        print("Final normalised probability to be object-" + str(self.name_id + 1) + " same with object-" +
-              str(other_object.name_id + 1) + ": " + str(norm_prob_final) + "\n")
+        # print("Final normalised probability to be object-" + str(self.name_id + 1) + " same with object-" +
+        #       str(other_object.name_id + 1) + ": " + str(norm_prob_final) + "\n")
 
         if norm_prob_final > 0.7:
+            print("object-" + str(self.name_id + 1) + " is same with object-" +
+                  str(other_object.name_id + 1) + ": " + str(norm_prob_final))
             return True
         else:
             return False
@@ -143,12 +153,9 @@ class DetectedObject:
         # TODO needs testing...
         # The dimensions are in meters. So assume that objects with same characteristics are at least 1.5 meters far
         # away from each other.
-        if self.length == 0 or self.z - z_inp < 1.5:
+        # TODO use self.length
+        if self.z - z_inp < 1.5:
             pz = 1
-        # else:
-        #     pz = 1 - ((abs(self.z - z_inp) - self.length / 2) / self.length)
-        #     if pz < 0:
-        #         pz = 0
         else:
             pz = 0
         return px * py * pz
@@ -157,7 +164,7 @@ class DetectedObject:
         rospy.wait_for_service('crop_pointcloud')
         try:
             crop_pointcloud = rospy.ServiceProxy('crop_pointcloud', Box)
-            object_pointcloud = crop_pointcloud(self.x, self.y, self.z, self.width,
+            object_pointcloud = crop_pointcloud(self.pcl_x, self.pcl_y, self.pcl_z, self.width,
                                                 self.height, self.whole_pointcloud)  # TODO replace z with median z?
             return object_pointcloud.pfh
         except rospy.ServiceException as e:
@@ -174,6 +181,11 @@ class ObjectDetector:
 
         self.object_pub = rospy.Publisher('/object_found', Detected_object, queue_size=10)
         self.pfh_pub = rospy.Publisher('/pfh_found', Point_feature_histogram, queue_size=10)
+
+        self.tf = TransformListener()
+        self.stop_callbacks_flag = False
+        # Holds the time that the instance has been taken.
+        self.current_time = rospy.Time(0)
 
         # Camera infos - they will be updated with the Callback, hopefully.
         self.cx_d = 0
@@ -193,7 +205,7 @@ class ObjectDetector:
         self.pcl = PointCloud2()
         # Stores the overall objects that have been found.
         self.detected_objects = []
-        # Stores the objects that have been found in the current frame.
+        # Stores the objects that have been found in the current instance.
         self.newly_detected_objects = []
         print("\nPress R if you want to trigger GUI for object detection...")
         print("Press Esc if you want to end the suffer of this node...\n")
@@ -209,12 +221,6 @@ class ObjectDetector:
                 self.depth_thresh_down = doc["clustering"]["depth_thresdown"]
             except yaml.YAMLError as exc:
                 print(exc)
-                # self.depth_weight = rospy.get_param("depth_weight")
-                # self.coordinates_weight = rospy.get_param("coordinates_weight")
-                # self.n_clusters = rospy.get_param("number_of_clusters")
-                # self.depth_thresh_up = rospy.get_param("depth_thresup")
-                # self.depth_thresh_down = rospy.get_param("depth_thresdown")
-                # print(self.depth_weight)
 
     def camera_info_callback(self, msg_info):
         self.cx_d = msg_info.K[2]
@@ -224,7 +230,8 @@ class ObjectDetector:
 
     def rgb_callback(self, msg_rgb):
         try:
-            cv_image = self.bridge.imgmsg_to_cv2(msg_rgb, desired_encoding="passthrough")
+            # TODO check if it is also ok with kinect
+            cv_image = self.bridge.imgmsg_to_cv2(msg_rgb, desired_encoding="bgr8")
             # Resize to the desired size
             cv_image_resized = cv2.resize(cv_image, tuple(reversed(self.desired_shape)), interpolation=cv2.INTER_AREA)
             self.rgb_img = cv_image_resized
@@ -236,16 +243,19 @@ class ObjectDetector:
                 print("Images from channels are not ready yet...")
             k = cv2.waitKey(1) & 0xFF
             if k == 114:  # if you press r, trigger the processing
+                self.stop_callbacks_flag = True
+                self.current_time = rospy.Time(0)
                 cv2.destroyAllWindows()
                 try:
                     self.process()
                 except NameError as warn:
                     cv2.destroyAllWindows()
                     print(warn)
+                self.stop_callbacks_flag = False
                 print("\nPress R if you want to trigger GUI for object detection...")
                 print("Press Esc if you want to end the suffer of this node...\n")
             if k == 27:  # if you press Esc, kill the node
-                rospy.signal_shutdown("Whatever")
+                rospy.signal_shutdown("Whatever...")
         except CvBridgeError as e:
             print(e)
 
@@ -260,8 +270,9 @@ class ObjectDetector:
         self.depth_img = self.depth_raw_img
 
     def pointcloud_callback(self, msg_pcl):
-        # TODO synchronize pcl with images
-        self.pcl = msg_pcl
+        # synchronize pcl with images
+        if not self.stop_callbacks_flag:
+            self.pcl = msg_pcl
 
     def process(self):
         bounding_boxes = gui_editor.gui_editor(self.rgb_img, self.depth_img)
@@ -278,8 +289,8 @@ class ObjectDetector:
                 coords = return_pcl(center_x * self.desired_divide_factor,
                                     center_y * self.desired_divide_factor,
                                     self.pcl)
-            except IndexError:
-                print("WARNING: Found object with gaps, let's ignore it!")
+            except (NameError, IndexError):
+                rospy.logwarn("WARNING: Found object with gaps, let's ignore it!")
                 continue
             # Based on formula: x3D = (x * 2 - self.cx_d) * z3D/self.fx_d
             # Based on formula: y3D = (y * 2 - self.cy_d) * z3D/self.fy_d
@@ -289,7 +300,21 @@ class ObjectDetector:
             # Crop the image and get just the bounding box.
             crop_rgb_img = self.rgb_img[y:y + h, x:x + w]
             crop_depth_img = self.depth_img[y:y + h, x:x + w]
-            det_object = DetectedObject(counter, coords[0], coords[1], coords[2], real_width, real_height, crop_rgb_img,
+
+            # Find the position of detected object relative to world.
+            try:
+                # Credits: http://www.euclideanspace.com/maths/geometry/affine/matrix4x4/
+                [translation, rotation] = self.tf.lookupTransform('map', 'camera_rgb_optical_frame', self.current_time)
+                transformation_matrix = self.tf.fromTranslationRotation(translation, rotation)
+                old_point_vector = np.asanyarray([coords[0], coords[1], coords[2], 1])
+                world_coordinates = transformation_matrix.dot(old_point_vector)
+                [world_x, world_y, world_z] = world_coordinates[0:3]
+            except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+                # In case of not turtlebot and just kinect.
+                rospy.logwarn("Cannot use transformation to the the frame of the world.")
+                world_x, world_y, world_z = coords[0], coords[1], coords[2]
+            det_object = DetectedObject(counter, coords[0], coords[1], coords[2],
+                                        world_x, world_y, world_z, real_width, real_height, crop_rgb_img,
                                         crop_depth_img, self.pcl)
             self.newly_detected_objects.append(det_object)
             counter += 1

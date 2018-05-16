@@ -16,15 +16,13 @@ class TFBroadcaster:
       
     def object_callback(self, msg):
         self.counter_of_detected_objects += 1
-        self.detected_objects.append(DetectedObject(msg.name_id, msg.x, msg.y, msg.z, msg.width, msg.height))
+        self.detected_objects.append(DetectedObject(msg.name_id, 0, 0, 0, msg.x, msg.y, msg.z, msg.width, msg.height))
         print("Objects on the map: " + str(len(self.detected_objects)))
 
     def publish_tfs(self, event):
         for obj in self.detected_objects:
-            #~ rospy.sleep(0.1)
             t = geometry_msgs.msg.TransformStamped()
-            # It is the same Header of the messages of pointcloud.
-            t.header.frame_id = "camera_rgb_optical_frame"
+            t.header.frame_id = "map"
             t.header.stamp = rospy.Time.now()
             t.child_frame_id = "Object" + str(obj.name_id)
             t.transform.translation.x = obj.x
@@ -45,4 +43,6 @@ if __name__ == '__main__':
     tfb = TFBroadcaster()
 
     rospy.Timer(rospy.Duration(1), tfb.publish_tfs)
+    rospy.loginfo("tf2_broadcaster node is up!")
+
     rospy.spin()

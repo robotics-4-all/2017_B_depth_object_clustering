@@ -27,7 +27,8 @@ def remove_background(feature_vector, depth_weight, depth_thresh_up, depth_thres
     feature_vector_array = normalize(feature_vector_array, norm='max', axis=0)
     feature_vector_array[:, -1] = feature_vector_array[:, -1] * depth_weight
 
-    k_means = KMeans(n_clusters=2, n_jobs=1).fit(feature_vector_array[:, [0, 1, 2, 5]])
+    # TODO do you need luminosity or not?
+    k_means = KMeans(n_clusters=2).fit(feature_vector_array[:, [0, 1, 2, 5]])
 
     processed_img_depth = feature_vector[:, :, -1].copy()
 
