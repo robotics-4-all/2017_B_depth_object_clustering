@@ -16,8 +16,8 @@ These instructions will get you a copy of the project up and running on your loc
 
 ### Prerequisites
 ```
-Linux (Kernel>= 4.13.0-45-generic)
-Python (Version >= 2.7 or >= 3.3)
+Linux (Kernel >= 4.13.0-45-generic)
+Python (Version >= 3.3)
 NumPy (Version >= 1.8.2)
 ROS (Version = Kinetic Kame)
 ```
