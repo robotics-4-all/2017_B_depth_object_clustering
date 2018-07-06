@@ -1,6 +1,5 @@
 Results/
 Database/
-*.png
 *.pyc
 *.bag
 ros_workspace/.catkin_workspace
