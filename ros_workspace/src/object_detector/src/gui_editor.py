@@ -12,7 +12,7 @@ def nothing(x):
     return x
 
 
-def gui_editor(rgb_img, depth_img):
+def gui_editor(rgb_img, depth_img, n_objects_so_far):
 
     # Read the parameters from the yaml file
     with open("../cfg/conf.yaml", 'r') as stream:
@@ -59,7 +59,8 @@ def gui_editor(rgb_img, depth_img):
                     start_time = time.time()
                     [clustered_img, _] = clusterer.clusterer(rgb_img, depth_img, n_clusters, depth_weight,
                                                              coord_weight, depth_thresh_up, depth_thresh_down)
-                    [img, bounding_boxes] = metaprocessor.meta_processor(clustered_img, rgb_img, depth_img, n_clusters)
+                    [img, bounding_boxes] = metaprocessor.meta_processor(clustered_img, rgb_img, depth_img, n_clusters,
+                                                                         n_objects_so_far)
                     elapsed_time = time.time() - start_time
                     print("Object detection is done in time: " + str(elapsed_time) + "s!")
                     print("Press ENTER to start or Esc to exit.")

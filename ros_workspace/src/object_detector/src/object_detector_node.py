@@ -76,6 +76,7 @@ class DetectedObject:
     def __str__(self):
         string_to_print = 'Object' + str(self.name_id) + ':(x:' + str(self.x) + ',y:' + str(self.y) + ',z:' \
                           + str(self.z) + ', width:' + str(self.width) + ',height:' + str(self.height) + ')'
+        cv2.imwrite('Results/Object' + str(self.name_id) + '.png', self.crop_rgb_img)
         return string_to_print
 
     def is_the_same_object(self, other_object):
@@ -104,7 +105,7 @@ class DetectedObject:
         # print("Final normalised probability to be object-" + str(self.name_id + 1) + " same with object-" +
         #       str(other_object.name_id + 1) + ": " + str(norm_prob_final) + "\n")
 
-        if norm_prob_final > 0.7:
+        if norm_prob_final > 0.6:
             print("object-" + str(self.name_id + 1) + " is same with object-" +
                   str(other_object.name_id + 1) + ": " + str(norm_prob_final))
             return True
@@ -275,8 +276,8 @@ class ObjectDetector:
             self.pcl = msg_pcl
 
     def process(self):
-        bounding_boxes = gui_editor.gui_editor(self.rgb_img, self.depth_img)
-        counter = len(self.detected_objects)
+        bounding_boxes = gui_editor.gui_editor(self.rgb_img, self.depth_img, len(self.detected_objects))
+        counter = len(self.detected_objects) + 1
         # For every newly found object.
         for c in bounding_boxes:
             x, y, w, h = cv2.boundingRect(c)
@@ -290,7 +291,7 @@ class ObjectDetector:
                                     center_y * self.desired_divide_factor,
                                     self.pcl)
             except (NameError, IndexError):
-                rospy.logwarn("WARNING: Found object with gaps, let's ignore it!")
+                rospy.logwarn("WARNING: Found object" + str(counter) + " with gaps, let's ignore it!")
                 continue
             # Based on formula: x3D = (x * 2 - self.cx_d) * z3D/self.fx_d
             # Based on formula: y3D = (y * 2 - self.cy_d) * z3D/self.fy_d
@@ -356,6 +357,7 @@ class ObjectDetector:
 
     # Saves the newly found object in the list of detected objects and sends it to tf2_broadcaster node.
     def save_and_send(self, to_send_object):
+        print(to_send_object)
         self.detected_objects.append(to_send_object)
         msg = Detected_object()
         msg.name_id = to_send_object.name_id

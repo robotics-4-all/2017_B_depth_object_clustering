@@ -26,7 +26,7 @@ def remove_array(l, arr):
         raise ValueError('Array not found in list.')
   
 
-def meta_processor(img, rgb_img, img_depth, n_clusters):
+def meta_processor(img, rgb_img, img_depth, n_clusters, n_objects_so_far):
     with open("../cfg/conf.yaml", 'r') as stream:
         try:
             doc = yaml.load(stream)
@@ -99,7 +99,7 @@ def meta_processor(img, rgb_img, img_depth, n_clusters):
                 x, y, w, h = cv2.boundingRect(c)
                 # Draw rectangle to visualize the bounding rect with color
                 cv2.rectangle(img_processed, (x, y), (x + w, y + h), col_dict[object_counter], 1)
-                cv2.putText(img_processed, str(object_counter), (x, y - 1), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                cv2.putText(img_processed, str(object_counter + n_objects_so_far), (x, y - 1), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                             col_dict[object_counter], 1)
 
             print ("Number of objects detected: " + str(object_counter))
@@ -107,6 +107,7 @@ def meta_processor(img, rgb_img, img_depth, n_clusters):
             vis1 = np.concatenate((rgb_img, cv2.cvtColor(img_depth, cv2.COLOR_GRAY2BGR), img), axis=1)
             vis2 = np.concatenate((cv2.cvtColor(overall_mask, cv2.COLOR_GRAY2BGR), img_mask, img_processed), axis=1)
             final_vis = np.concatenate((vis1, vis2), axis=0)
+            cv2.imwrite('Results/result' + str(n_objects_so_far) + '.png', final_vis)
             return [final_vis, final_contours]
         except yaml.YAMLError as exc:
             print(exc)
