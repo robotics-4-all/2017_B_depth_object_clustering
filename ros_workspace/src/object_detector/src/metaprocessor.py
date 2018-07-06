@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# Filename: metaprocessor.py
 import cv2
 import numpy as np
 import yaml
@@ -25,20 +26,20 @@ def remove_array(l, arr):
         raise ValueError('Array not found in list.')
   
 
-def meta_processor(img, rgb_img, img_depth, n_clusters):
+def meta_processor(img, rgb_img, img_depth, n_clusters, n_objects_so_far):
     with open("../cfg/conf.yaml", 'r') as stream:
         try:
             doc = yaml.load(stream)
-            coldict = doc["clustering"]["coldict"]
+            col_dict = doc["clustering"]["coldict"]
 
-            imgproc = rgb_img.copy()
+            img_processed = rgb_img.copy()
             height, width, channels = img.shape
             overall_mask = np.zeros((height, width), np.uint8)  # blank mask
             object_counter = 0
 
-            prefinal_contours = list()
+            pre_final_contours = list()
             for i in range(0, n_clusters):
-                desired_color = coldict[i]
+                desired_color = col_dict[i]
 
                 desired_color_array = np.array(desired_color, dtype="uint8")
                 mask_init = cv2.inRange(img, desired_color_array, desired_color_array)
@@ -54,57 +55,60 @@ def meta_processor(img, rgb_img, img_depth, n_clusters):
                 mask = cv2.erode(mask, kernel_ero, iterations=1)
                 mask = cv2.erode(mask, np.ones((2, 2), np.uint8), iterations=1)
 
-                image, contours, hier = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+                image, contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
                 for c in contours[0:len(contours)]:  # TODO fix this, every contour is double
                     x, y, w, h = cv2.boundingRect(c)
                     if w * h > 500:
-                        prefinal_contours.append(c)
+                        pre_final_contours.append(c)
                 overall_mask = np.bitwise_or(mask, overall_mask)
 
-            final_contours = list(prefinal_contours)
-            # Check for inter_section of bounding boxes
-            for i in range(len(prefinal_contours) - 1):
-                box1 = cv2.boundingRect(prefinal_contours[i])
-                for j in range(i + 1, len(prefinal_contours)):
-                    box2 = cv2.boundingRect(prefinal_contours[j])
+            final_contours = list(pre_final_contours)
+            # Check for intersection of bounding boxes
+            for i in range(len(pre_final_contours) - 1):
+                box1 = cv2.boundingRect(pre_final_contours[i])
+                for j in range(i + 1, len(pre_final_contours)):
+                    box2 = cv2.boundingRect(pre_final_contours[j])
                     inter_sec = inter_section(box1, box2)
-                    # Check if there is an inter_section and it's larger than the half of the minimum of bounding boxes
+                    # Check if there is an intersection and it's larger than the half of the minimum of bounding boxes
                     if inter_sec != () and inter_sec[2] * inter_sec[3] > 0.5 * min((box1[2] * box1[3]),
                                                                                    (box2[2] * box2[3])):
-                        center1 = np.asarray(tuple(map(lambda m, n: m + n / 2, box1[0:2], box1[2:24])))
-                        center2 = np.asarray(tuple(map(lambda m, n: m + n / 2, box2[0:2], box2[2:24])))
+                        center1 = np.asarray(tuple(map(lambda m, n: m + n / 2, box1[0:2], box1[2:4])))
+                        center2 = np.asarray(tuple(map(lambda m, n: m + n / 2, box2[0:2], box2[2:4])))
                         dist1 = [center1[0] - inter_sec[0], center1[1] - inter_sec[1]]
                         dist2 = [center2[0] - inter_sec[0], center2[1] - inter_sec[1]]
-                        # Vectors that lead from the inter_section point to the center of bounding box
+                        # Vectors that lead from the intersection point to the center of bounding box
                         unit_vector1 = np.sign(dist1)
                         unit_vector2 = np.sign(dist2)
-                        pixel1 = np.asarray(inter_sec[0:2]) + unit_vector1 * 15
-                        pixel2 = np.asarray(inter_sec[0:2]) + unit_vector2 * 15
-
+                        pixel_distance_to_center = 15
+                        pixel1 = np.asarray(inter_sec[0:2]) + unit_vector1 * pixel_distance_to_center
+                        pixel2 = np.asarray(inter_sec[0:2]) + unit_vector2 * pixel_distance_to_center
                         # Compare the depths of bounding box in a neighborhood and compare it with a threshold
-                        if abs(int(img_depth[pixel1[1]][pixel1[0]]) - int(img_depth[pixel2[1]][pixel2[0]])) < 1:
+                        # TODO which does better job? maybe median
+                        # if abs(int(img_depth[pixel1[1]][pixel1[0]]) - int(img_depth[pixel2[1]][pixel2[0]])) < 1:
+                        if abs(int(img_depth[center1[1]][center1[0]]) - int(img_depth[center2[1]][center2[0]])) < 3:
                             # Find the smallest bounding box, check if it is already removed and remove it.
-                            if cv2.contourArea(prefinal_contours[i]) < cv2.contourArea(prefinal_contours[j]) \
-                                    and any((np.array_equal(prefinal_contours[i], x)) for x in final_contours):
-                                remove_array(final_contours, prefinal_contours[i])
-                            elif cv2.contourArea(prefinal_contours[i]) >= cv2.contourArea(prefinal_contours[j]) \
-                                    and any((np.array_equal(prefinal_contours[j], x)) for x in final_contours):
-                                remove_array(final_contours, prefinal_contours[j])
+                            if cv2.contourArea(pre_final_contours[i]) < cv2.contourArea(pre_final_contours[j]) \
+                                    and any((np.array_equal(pre_final_contours[i], x)) for x in final_contours):
+                                remove_array(final_contours, pre_final_contours[i])
+                            elif cv2.contourArea(pre_final_contours[i]) >= cv2.contourArea(pre_final_contours[j]) \
+                                    and any((np.array_equal(pre_final_contours[j], x)) for x in final_contours):
+                                remove_array(final_contours, pre_final_contours[j])
             for c in final_contours:
                 object_counter += 1
                 # Get the bounding rect
                 x, y, w, h = cv2.boundingRect(c)
                 # Draw rectangle to visualize the bounding rect with color
-                cv2.rectangle(imgproc, (x, y), (x + w, y + h), coldict[object_counter], 1)
-                cv2.putText(imgproc, str(object_counter), (x, y - 1), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                            coldict[object_counter], 1)
+                cv2.rectangle(img_processed, (x, y), (x + w, y + h), col_dict[object_counter], 1)
+                cv2.putText(img_processed, str(object_counter + n_objects_so_far), (x, y - 1), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                            col_dict[object_counter], 1)
 
             print ("Number of objects detected: " + str(object_counter))
             img_mask = cv2.bitwise_and(rgb_img, rgb_img, mask=cv2.bitwise_not(overall_mask))
             vis1 = np.concatenate((rgb_img, cv2.cvtColor(img_depth, cv2.COLOR_GRAY2BGR), img), axis=1)
-            vis2 = np.concatenate((cv2.cvtColor(overall_mask, cv2.COLOR_GRAY2BGR), img_mask, imgproc), axis=1)
-            finalvis = np.concatenate((vis1, vis2), axis=0)
-            return [finalvis, final_contours]
+            vis2 = np.concatenate((cv2.cvtColor(overall_mask, cv2.COLOR_GRAY2BGR), img_mask, img_processed), axis=1)
+            final_vis = np.concatenate((vis1, vis2), axis=0)
+            cv2.imwrite('Results/result' + str(n_objects_so_far) + '.png', final_vis)
+            return [final_vis, final_contours]
         except yaml.YAMLError as exc:
             print(exc)
   
