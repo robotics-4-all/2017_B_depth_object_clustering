@@ -42,4 +42,4 @@ pip install -U scikit-learn
 * **Eleftherios Mylonakis** - *Code and thesis writing* - [lefos99](https://github.com/lefos99)
 
 ## Acknowledgments
-* **Manos Tsardoulias** - *Guidance during Thesis writing* - [lefos99](https://github.com/etsardou)
+* **Manos Tsardoulias** - *Guidance during Thesis writing* - [etsardou](https://github.com/etsardou)
